@@ -1,0 +1,29 @@
+
+### THE PARAMETERS IN THIS SECTION ARE REQUIRED ###
+
+# input observation list
+OBSFILE: /Users/christopherhirata/sampledata/observing_sequence_hls_06_21.fits
+
+# reference input file directory and naming convention (including the WCS used for stacking)
+INDATA: /Users/christopherhirata/sampledata/simple dc2_imsim
+
+# location of the output region to make
+CTR: 50.3 -37.3
+OUTSIZE: 48 50 .025
+BLOCK: 60
+
+# which filter
+FILTER: 3
+
+# input PSF files & format
+INPSF: /Users/christopherhirata/sampledata dc2_imsim
+
+# output location:
+OUT: t1
+
+### END REQUIRED PARAMETERS ###
+
+### OPTIONAL PARAMETERS ###
+
+# number of IMCOM postage stamps to pad around each output region
+PAD: 2
