@@ -18,11 +18,12 @@ class EmptyClass:
 outcoords = EmptyClass() # will fill this in later
 
 # some default settings
-sigmatarget = 0.42 # FWHM 1 pix Gaussian smoothing
+sigmatarget = 1.5/2.355 # FWHM Gaussian smoothing divided by 2.355 to be a sigma
 npixpsf = 64 # size of PSF postage stamp in native pixels
 instamp_pad = 1.*coadd_utils.arcsec # input stamp size padding
-imcom_smax = 1./numpy.sqrt(5.)
+imcom_smax = 0.2
 imcom_flat_penalty = 1e-8
+n_inframe = 1 # number of input images to stack at once
 
 # Read in information
 config_file = sys.argv[1]
@@ -149,7 +150,7 @@ for i in range(5): print(i, wcsout.wcs_pix2world(numpy.array([[cornerx[i],corner
 outcoords.centerpos = wcsout.wcs_pix2world(numpy.array([[cornerx[-1],cornery[-1]]]), 0)[0] # [ra,dec] array in degrees
 
 # make basic output array
-out_map = numpy.zeros((n_out, outcoords.NsideP, outcoords.NsideP), dtype=numpy.float32)
+out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP, outcoords.NsideP), dtype=numpy.float32)
 
 # and the output PSFs and target leakages
 #
@@ -186,11 +187,17 @@ print('')
 if len(obslist)==0:
   print('No candidate observations found to stack. Exiting now.')
   exit()
+sys.stdout.write('Reading input data ... ')
+in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat)
+sys.stdout.write('done.\n')
+sys.stdout.flush()
+print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
+print('')
 
 ### Begin loop over all the postage stamps we want to create ###
 
 nrun = outcoords.n1P**2
-nrun = 20 # <-- for testing only
+nrun = 312 # <-- for testing only, to do the first patches
 for ipostage in range(nrun):
   ipostageX = 2 * ((ipostage//4)% (outcoords.n1P//2) )
   ipostageY = 2 * ((ipostage//4)//(outcoords.n1P//2) )
@@ -213,10 +220,13 @@ for ipostage in range(nrun):
         pos = inwcs[j].wcs_world2pix(numpy.array([psf_compute_point.tolist()]), 0)[0]
         pixloc[j] = pos
         # check if this point is on the SCA
-        if pos[0]<4 or pos[0]>=coadd_utils.sca_nside-4 or pos[1]<4 or pos[1]>=coadd_utils.sca_nside-4:
+        if pos[0]<0 or pos[0]>=coadd_utils.sca_nside or pos[1]<0 or pos[1]>=coadd_utils.sca_nside:
           useInput[j] = False
           continue
         psfs[j] = coadd_utils.get_psf_pos(inpsf, obslist[j], obsdata, pos)
+        if psfs[j] is None:
+          useInput[j] = False
+          continue
         #
         # window location
         win = coadd_utils.genWindow(pos[0],pos[1],rpix_search_in,inwcs[j],wcsout)
@@ -241,10 +251,17 @@ for ipostage in range(nrun):
     psfOverlap = pyimcom_interface.PSF_Overlap(InputPSF, OutputPSF, .5, 2*npixpsf*inpsf['oversamp']-1, coadd_utils.pixscale_native/coadd_utils.arcsec,
         distort_matrices=distort_matrices)
 
-    hdu = fits.PrimaryHDU(psfOverlap.psf_array)
-    hdu.writeto(outstem+'_testpsf.fits', overwrite=True)
+    # this output was for testing. might put it back later
+    #hdu = fits.PrimaryHDU(psfOverlap.psf_array)
+    #hdu.writeto(outstem+'_testpsf.fits', overwrite=True)
 
   # -- end PSF matrices --
+
+  n_in = len(useList)
+  if n_in==0:
+    print('empty input list ... skipping')
+    continue
+  inmask = numpy.zeros((n_in,insize,insize), dtype=bool)
 
   # get windows for the input images
   windows = []
@@ -252,19 +269,33 @@ for ipostage in range(nrun):
   xtile = ipostageX*outcoords.n2 + (outcoords.n2-1)/2.
   ytile = ipostageY*outcoords.n2 + (outcoords.n2-1)/2.
   ctr = wcsout.wcs_pix2world(numpy.array([[xtile,ytile]]) ,0)[0]
-  for i_in in range(len(useList)):
+  incube = numpy.zeros((n_inframe, n_in, insize, insize))
+  for i_in in range(n_in):
     j = useList[i_in]
     pos = inwcs[j].wcs_world2pix(numpy.array([ctr.tolist()]), 0)[0]
     windows.append( coadd_utils.genWindow(pos[0],pos[1],insize,inwcs[j],wcsout) )
     posoffset.append(((windows[i_in]['outx']-xtile)*outcoords.dtheta*3600., (windows[i_in]['outy']-ytile)*outcoords.dtheta*3600.))
-
-  # want to get to the coaddition step
-  # ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], posoffset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), 
-  # inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
+    inmask[i_in,:,:] = windows[i_in]['active']
+    incube[0,i_in,:,:] = coadd_utils.snap_instamp(in_data[:,j,:,:], windows[i_in])
 
   imcomSysSolve = pyimcom_interface.get_coadd_matrix(psfOverlap, float(inpsf['oversamp']), uctarget, posoffset, distort_matrices,
     coadd_utils.pixscale_native/coadd_utils.arcsec, (insize,insize), outcoords.dtheta*3600, (outcoords.n2,outcoords.n2),
-    None, instamp_pad/coadd_utils.arcsec, imcom_smax, flat_penalty=imcom_flat_penalty)
+    inmask, instamp_pad/coadd_utils.arcsec, imcom_smax, flat_penalty=imcom_flat_penalty)
+  print('  n input pix =',numpy.sum(numpy.where(imcomSysSolve['full_mask'],1,0)))
+  sumstats = '  sqUC,sqSig %iles |'
+  for i in [50,90,98,99]:
+    sumstats += ' {:2d}% {:8.2E} {:8.2E} |'.format(i, numpy.percentile(numpy.sqrt(imcomSysSolve['UC']),i), numpy.percentile(numpy.sqrt(imcomSysSolve['Sigma']),i))
+  print(sumstats)
+
+  hdu = fits.PrimaryHDU(imcomSysSolve['A']); hdu.writeto(outstem+'A.fits', overwrite=True)
+  hdu = fits.PrimaryHDU(imcomSysSolve['T'].reshape((n_out,outcoords.n2**2, n_in*insize**2))); hdu.writeto(outstem+'T.fits', overwrite=True)
+
+  # the actual multiplication
+  for v in range(n_inframe):
+    out_map[:,v,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2] =\
+      (imcomSysSolve['T'].reshape(n_out*outcoords.n2**2,n_in*insize**2)@incube[v,:,:,:].flatten()).reshape(n_out,outcoords.n2,outcoords.n2)
+
+  sys.stdout.flush()
 
 ### End for ipostage loop ###
 
@@ -273,3 +304,8 @@ for ipostage in range(nrun):
 maphdu = fits.PrimaryHDU(out_map, header=wcsout.to_header())
 hdu_list = fits.HDUList([maphdu])
 hdu_list.writeto(outstem+'_map.fits', overwrite=True)
+
+print('')
+print('finished at t =', time.perf_counter(), 's')
+print('')
+

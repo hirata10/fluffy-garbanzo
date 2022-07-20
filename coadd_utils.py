@@ -14,7 +14,7 @@ QFilterNative = [ 1.155,  1.456,  1.250,  1.021,  0.834,  0.689,  0.491,  1.009,
 
 # SCA parameters
 pixscale_native = 0.11*arcsec
-sca_nside = 4096 # includes reference pixels
+sca_nside = 4088 # excludes reference pixels
 sca_ctrpix = (sca_nside-1)/2
 sca_sidelength = sca_nside * pixscale_native
 
@@ -93,6 +93,32 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
 
   return None
 
+# makes a 4D array of the image data
+#  axes of the output = [input type (e.g., 0=sci or sim), exposure index, y, x]
+#
+# Inputs:
+#   n_inframe = number of input frames
+#   obslist = which observations to use (list of tupes (obsid, sca) (sca in 1..18))
+#   obsdata = observation data table (information needed for some formats)
+#   path = directory for the files
+#   format = string describing type of file name
+#   extraargs = for future compatibility
+#
+def get_all_data(n_inframe, obslist, obsdata, path, format, extraargs=None):
+
+  # start by allocating the memory ...
+  hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
+
+  # now fill in each slice in the observation
+  # (missing files are blank)
+  for j in range(len(obslist)):
+    filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs)
+    if exists(filename):
+      if format=='dc2_imsim':
+        with fits.open(filename) as f: hypercube[0,j,:,:] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
+
+  return hypercube
+
 # make a window of specified radius around a specified point, within an SCA
 # (x,y) and insize in pixels
 # also takes in input and output wcs
@@ -114,12 +140,24 @@ def genWindow(x,y,insize,wcsin,wcsout):
   p = wcsin.wcs_pix2world(numpy.array([[xc,yc]]) ,0)[0]
   wcspos = wcsout.wcs_world2pix(numpy.array([p]),0)[0]
 
-  return {'xmin':xmin, 'xmax':xmax, 'ymin':ymin, 'ymax':ymax, 'xc':xc, 'yc':yc, 'outx':wcspos[0], 'outy':wcspos[1]}
+  # get active pixels
+  activepix = numpy.ones((insize,insize), dtype=bool)
+  if xmin<0: activepix[:,:-xmin] = False
+  if xmax>sca_nside: activepix[:,sca_nside-xmax:] = False
+  if ymin<0: activepix[:-ymin,:] = False
+  if ymax>sca_nside: activepix[sca_nside-ymax:,:] = False
+
+  return {'xmin':xmin, 'xmax':xmax, 'ymin':ymin, 'ymax':ymax, 'xc':xc, 'yc':yc, 'outx':wcspos[0], 'outy':wcspos[1], 'active':activepix}
+
+# makes a snapshot of the frame given by the [ymin:ymax,xmin:xmax] of the window, possibly overlapping the edge
+def snap_instamp(image,window):
+  d = max(window['xmax']-window['xmin'], window['ymax']-window['ymin'])
+  return numpy.pad(image, ((0,0), (d,d), (d,d)))[:,d+window['ymin']:d+window['ymax'],d+window['xmin']:d+window['xmax']]
 
 ### Routines for handling the PSF ###
 
 # Utility to smear a PSF with a tophat and a Gaussian
-#
+# tophat --> width, Gaussian --> sigma in units of the pixels given (not native pixel)
 #
 def smooth_and_pad(inArray, tophatwidth=0., gaussiansigma=0.):
   npad = int(numpy.ceil(tophatwidth + 6*gaussiansigma + 1))
@@ -130,9 +168,9 @@ def smooth_and_pad(inArray, tophatwidth=0., gaussiansigma=0.):
   outArray[npad:-npad,npad:-npad]=inArray
   outArrayFT = numpy.fft.fft2(outArray)
 
+  # convolution
   uy = numpy.linspace(0,nyy-1,nyy)/nyy; uy = numpy.where(uy>.5,uy-1,uy)
   ux = numpy.linspace(0,nxx-1,nxx)/nxx; ux = numpy.where(ux>.5,ux-1,ux)
-
   outArrayFT *= numpy.sinc(ux[None,:]*tophatwidth)*numpy.sinc(uy[:,None]*tophatwidth)*numpy.exp(-2.*numpy.pi**2*gaussiansigma**2*(ux[None,:]**2+uy[:,None]**2))
 
   outArray = numpy.real(numpy.fft.ifft2(outArrayFT))
