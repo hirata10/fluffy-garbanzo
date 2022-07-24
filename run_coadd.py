@@ -22,8 +22,9 @@ sigmatarget = 1.5/2.355 # FWHM Gaussian smoothing divided by 2.355 to be a sigma
 npixpsf = 64 # size of PSF postage stamp in native pixels
 instamp_pad = 1.*coadd_utils.arcsec # input stamp size padding
 imcom_smax = 0.2
-imcom_flat_penalty = 1e-8
-n_inframe = 1 # number of input images to stack at once
+imcom_flat_penalty = 1e-4
+fade_kernel = 3 # fading kernel width
+n_inframe = 1; extrainput = [None] # number of input images to stack at once
 
 # Read in information
 config_file = sys.argv[1]
@@ -76,6 +77,11 @@ for line in content:
   if m:
     inpath = m.group(1)
     informat = m.group(2)
+  m = re.search('^EXTRAINPUT\:', line)
+  if m:
+    extrainput = line.split()
+    extrainput[0] = None
+    n_inframe = len(extrainput)
 
   # input files
   m = re.search('^INPSF\:\s*(\S+)\s+(\S+)', line)
@@ -95,7 +101,10 @@ outcoords.n1P = outcoords.n1 + outcoords.postage_pad*2
 if outcoords.n1%2!=0:
   print('Error: n1 must be even since PSF computations are in 2x2 groups')
   exit()
+outcoords.n2f = outcoords.n2 + fade_kernel*2
 #
+print('General input information:')
+print('number of input frames = ', n_inframe, 'type =', extrainput)
 # search radius for input pixels
 rpix_search_in = int(numpy.ceil((outcoords.n2*outcoords.dtheta*coadd_utils.degree/numpy.sqrt(2.) + instamp_pad)/coadd_utils.pixscale_native + 1))
 insize = 2*rpix_search_in
@@ -131,6 +140,8 @@ if nblock%p==0: p=281
 j = (this_sub*p)%(nblock**2)
 outcoords.ibx = j//nblock; outcoords.iby = j%nblock
 print('sub-block {:4d} <{:2d},{:2d}> of {:2d}x{:2d}={:2d}'.format(this_sub, outcoords.ibx, outcoords.iby, nblock, nblock, nblock**2))
+outstem += '_{:02d}_{:02d}'.format(outcoords.ibx, outcoords.iby)
+print('outputs directed to -->', outstem)
 #
 # make the WCS
 wcsout = wcs.WCS(naxis=2)
@@ -150,14 +161,20 @@ for i in range(5): print(i, wcsout.wcs_pix2world(numpy.array([[cornerx[i],corner
 outcoords.centerpos = wcsout.wcs_pix2world(numpy.array([[cornerx[-1],cornery[-1]]]), 0)[0] # [ra,dec] array in degrees
 
 # make basic output array
-out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP, outcoords.NsideP), dtype=numpy.float32)
+out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.float32)
 
 # and the output PSFs and target leakages
 #
 # (this will have to be modified for multiple outputs)
 OutputPSF = [pyimcom_interface.psf_simple_airy(npixpsf*inpsf['oversamp'],coadd_utils.QFilterNative[use_filter]*inpsf['oversamp'],
-  tophat_conv=0.,sigma=sigmatarget*inpsf['oversamp'])]
-uctarget = [1e-6]
+  obsc=coadd_utils.obsc,tophat_conv=0.,sigma=sigmatarget*inpsf['oversamp'])]
+uctarget = [1.e-6]
+
+# save the output PSFs to a file
+OutputPSFHDU = fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(x) for x in OutputPSF])
+for i in range(len(OutputPSF)): OutputPSFHDU[i+1].header['WHICHPSF'] = 'Output {:d}'.format(i)
+OutputPSFHDU.writeto(outstem+'_outputpsfs.fits', overwrite=True)
+del OutputPSFHDU
 
 ### Now figure out which observations we need ###
 
@@ -168,6 +185,7 @@ infiles = []; infile_exists = []; infile_chars = []; inwcs = []
 for j in range(len(obslist)):
   infiles += [coadd_utils.get_sca_imagefile(inpath, obslist[j], obsdata, informat)]
   infile_exists += [exists(infiles[j])]
+  if coadd_utils.get_psf_pos(inpsf, obslist[j], obsdata, (0,0)) is None: infile_exists[j] = False
   if infile_exists[j]:
     infile_chars += [' ']
     with fits.open(infiles[j]) as f: inwcs += [wcs.WCS(f[hdu_with_wcs].header)]
@@ -188,7 +206,7 @@ if len(obslist)==0:
   print('No candidate observations found to stack. Exiting now.')
   exit()
 sys.stdout.write('Reading input data ... ')
-in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat)
+in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, extrainput)
 sys.stdout.write('done.\n')
 sys.stdout.flush()
 print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
@@ -197,13 +215,15 @@ print('')
 ### Begin loop over all the postage stamps we want to create ###
 
 nrun = outcoords.n1P**2
-nrun = 312 # <-- for testing only, to do the first patches
+# nrun = 104 # <-- for testing only, to do the first patches
 for ipostage in range(nrun):
   ipostageX = 2 * ((ipostage//4)% (outcoords.n1P//2) )
   ipostageY = 2 * ((ipostage//4)//(outcoords.n1P//2) )
   if ipostage%2==1: ipostageX += 1
   if ipostage%4>=2: ipostageY += 1
   print('postage stamp {:2d},{:2d}  {:6.3f}% t= {:9.2f} s'.format(ipostageX, ipostageY, 100*ipostage/outcoords.n1P**2, time.perf_counter()))
+
+  # if ipostageX>=12: continue # <-- also for testing, just to do the first few columns
 
   # In these cases, we need to compute the PSF matrices and decide which inputs to use
   # (to save time, only done every 4th IMCOM run)
@@ -249,7 +269,7 @@ for ipostage in range(nrun):
     print('using input exposures:', useList)
 
     psfOverlap = pyimcom_interface.PSF_Overlap(InputPSF, OutputPSF, .5, 2*npixpsf*inpsf['oversamp']-1, coadd_utils.pixscale_native/coadd_utils.arcsec,
-        distort_matrices=distort_matrices)
+        distort_matrices=distort_matrices, amp_penalty={'amp':1., 'sig':3.*inpsf['oversamp']})
 
     # this output was for testing. might put it back later
     #hdu = fits.PrimaryHDU(psfOverlap.psf_array)
@@ -276,10 +296,10 @@ for ipostage in range(nrun):
     windows.append( coadd_utils.genWindow(pos[0],pos[1],insize,inwcs[j],wcsout) )
     posoffset.append(((windows[i_in]['outx']-xtile)*outcoords.dtheta*3600., (windows[i_in]['outy']-ytile)*outcoords.dtheta*3600.))
     inmask[i_in,:,:] = windows[i_in]['active']
-    incube[0,i_in,:,:] = coadd_utils.snap_instamp(in_data[:,j,:,:], windows[i_in])
+    incube[:,i_in,:,:] = coadd_utils.snap_instamp(in_data[:,j,:,:], windows[i_in])
 
   imcomSysSolve = pyimcom_interface.get_coadd_matrix(psfOverlap, float(inpsf['oversamp']), uctarget, posoffset, distort_matrices,
-    coadd_utils.pixscale_native/coadd_utils.arcsec, (insize,insize), outcoords.dtheta*3600, (outcoords.n2,outcoords.n2),
+    coadd_utils.pixscale_native/coadd_utils.arcsec, (insize,insize), outcoords.dtheta*3600, (outcoords.n2f,outcoords.n2f),
     inmask, instamp_pad/coadd_utils.arcsec, imcom_smax, flat_penalty=imcom_flat_penalty)
   print('  n input pix =',numpy.sum(numpy.where(imcomSysSolve['full_mask'],1,0)))
   sumstats = '  sqUC,sqSig %iles |'
@@ -287,21 +307,35 @@ for ipostage in range(nrun):
     sumstats += ' {:2d}% {:8.2E} {:8.2E} |'.format(i, numpy.percentile(numpy.sqrt(imcomSysSolve['UC']),i), numpy.percentile(numpy.sqrt(imcomSysSolve['Sigma']),i))
   print(sumstats)
 
-  hdu = fits.PrimaryHDU(imcomSysSolve['A']); hdu.writeto(outstem+'A.fits', overwrite=True)
-  hdu = fits.PrimaryHDU(imcomSysSolve['T'].reshape((n_out,outcoords.n2**2, n_in*insize**2))); hdu.writeto(outstem+'T.fits', overwrite=True)
+  # outputs for test purposes only
+  #hdu = fits.PrimaryHDU(imcomSysSolve['A']); hdu.writeto(outstem+'A.fits', overwrite=True)
+  #hdu = fits.PrimaryHDU(imcomSysSolve['T'].reshape((n_out,outcoords.n2f**2, n_in*insize**2))); hdu.writeto(outstem+'T.fits', overwrite=True)
 
-  # the actual multiplication
+  # the actual multiplication. includes multiplication by the trapezoid filter with transition width fade_kernel
+  wt = coadd_utils.trapezoid(outcoords.n2,fade_kernel)
   for v in range(n_inframe):
-    out_map[:,v,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2] =\
-      (imcomSysSolve['T'].reshape(n_out*outcoords.n2**2,n_in*insize**2)@incube[v,:,:,:].flatten()).reshape(n_out,outcoords.n2,outcoords.n2)
+    out_map[:,v,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] +=\
+      wt*(imcomSysSolve['T'].reshape(n_out*outcoords.n2f**2,n_in*insize**2)@incube[v,:,:,:].flatten()).reshape(n_out,outcoords.n2f,outcoords.n2f)
 
   sys.stdout.flush()
+
+  # Write an intermediate map
+  if ipostageX==0 and ipostageY%2==0:
+    print('  --> intermediate output -->')
+    maphdu = fits.PrimaryHDU(out_map[:,:,fade_kernel:-fade_kernel,fade_kernel:-fade_kernel], header=wcsout.to_header())
+    hdu_list = fits.HDUList([maphdu])
+    hdu_list.writeto(outstem+'_map.fits', overwrite=True)
 
 ### End for ipostage loop ###
 
 ### Output array ###
 
-maphdu = fits.PrimaryHDU(out_map, header=wcsout.to_header())
+# divide the output map by the kernel contribution
+for i1 in range(n_out):
+  for i2 in range(n_inframe):
+    out_map[i1,i2,:,:] /= coadd_utils.trapezoid(outcoords.NsideP,fade_kernel)
+
+maphdu = fits.PrimaryHDU(out_map[:,:,fade_kernel:-fade_kernel,fade_kernel:-fade_kernel], header=wcsout.to_header())
 hdu_list = fits.HDUList([maphdu])
 hdu_list.writeto(outstem+'_map.fits', overwrite=True)
 

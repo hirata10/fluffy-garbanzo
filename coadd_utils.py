@@ -1,4 +1,7 @@
 import numpy
+import re
+import fitsio
+from fitsio import FITS,FITSHDR
 from astropy.io import fits
 from os.path import exists
 
@@ -11,6 +14,9 @@ arcsec = arcmin/60.
 # filter list
 RomanFilters  = ['W146', 'F184', 'H158', 'J129', 'Y106', 'Z087', 'R062', 'PRSM', 'DARK', 'GRSM', 'K213']
 QFilterNative = [ 1.155,  1.456,  1.250,  1.021,  0.834,  0.689,  0.491,  1.009,  0.000,  1.159,  1.685]
+
+# linear obscuration of the telescope
+obsc = 0.31
 
 # SCA parameters
 pixscale_native = 0.11*arcsec
@@ -80,15 +86,19 @@ def get_obs_cover(obsdata, ra, dec, radius, filter):
 # idsca = tuple (obsid, sca) (sca in 1..18)
 # obsdata = observation data table (information needed for some formats)
 # format = string describing type of file name
-# extraargs = for future compatibility
+# extraargs = dictionary of extra arguments
 #
 # returns None if unrecognized format
 def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
 
-  out = path+'/'
-
+  # right now this is the only type defined
   if format=='dc2_imsim':
-    out += 'dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+    out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+    if extraargs is not None:
+      if 'type' in extraargs.keys():
+        if extraargs['type']=='truth':
+          out = path+'/truth/dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+
     return out
 
   return None
@@ -102,9 +112,10 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
 #   obsdata = observation data table (information needed for some formats)
 #   path = directory for the files
 #   format = string describing type of file name
+#   extrainput = make multiple maps (list of types, first should be None, rest strings)
 #   extraargs = for future compatibility
 #
-def get_all_data(n_inframe, obslist, obsdata, path, format, extraargs=None):
+def get_all_data(n_inframe, obslist, obsdata, path, format, extrainput, extraargs=None):
 
   # start by allocating the memory ...
   hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
@@ -112,10 +123,28 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, extraargs=None):
   # now fill in each slice in the observation
   # (missing files are blank)
   for j in range(len(obslist)):
-    filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs)
+    filename = get_sca_imagefile(path, obslist[j], obsdata, format)
     if exists(filename):
       if format=='dc2_imsim':
         with fits.open(filename) as f: hypercube[0,j,:,:] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
+    #
+    # now for the extra inputs
+    if n_inframe>1:
+      for i in range(1,n_inframe):
+        # truth image (no noise)
+        if extrainput[i].casefold() == 'truth'.casefold():
+          filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs = {'type':'truth'})
+          if exists(filename):
+            with fits.open(filename) as f: hypercube[i,j,:,:] = f['SCI'].data
+        # pure noise frames (generated from RNG, not file)
+        m = re.search(r'^whitenoise(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+          q = int(m.group(1))
+          seed = 1000000*(18*q+obslist[j][1]) + obslist[j][0]
+          print('noise rng: frame_q={:d}, seed={:d}'.format(q,seed))
+          rng = numpy.random.default_rng(seed)
+          hypercube[i,j,:,:] = rng.normal(loc=0., scale=1., size=(sca_nside,sca_nside))
+          del rng
 
   return hypercube
 
@@ -188,12 +217,23 @@ def smooth_and_pad(inArray, tophatwidth=0., gaussiansigma=0.):
 # Returns the PSF at that position
 # 'effective' PSF is returned, some formats may include extra smoothing
 #
+# Returns None if can't find the file.
+#
 def get_psf_pos(inpsf, idsca, obsdata, pos, extraargs=None):
 
   if inpsf['format']=='dc2_imsim':
     fname = inpsf['path'] + '/dc2_psf_{:d}.fits'.format(idsca[0])
     if not exists(fname): return None
-    with fits.open(fname) as f: this_psf = smooth_and_pad(f[idsca[1]+1].data, tophatwidth=inpsf['oversamp'])
+
+    # fitsio version
+    fileh = fitsio.FITS(fname)
+    this_psf = smooth_and_pad(fileh[idsca[1]+1][:,:], tophatwidth=inpsf['oversamp'])
+    fileh.close()
+
+    # old astropy.io fits input
+    #f = fits.open(fname)
+    #this_psf = smooth_and_pad(f[idsca[1]+1].data, tophatwidth=inpsf['oversamp'])
+    #f.close()
 
   return this_psf
 
@@ -205,3 +245,19 @@ def get_psf_oversamp(inpsf):
   if inpsf['format']=='dc2_imsim':
     return 8
   return None
+
+### Fade Kernel methods ###
+
+# array with a trapezoid filter of width n+2*fade_kernel on each side
+def trapezoid(n,fade_kernel):
+  ar = numpy.ones((n+2*fade_kernel,n+2*fade_kernel))
+  if n<=2*fade_kernel:
+    print('Fatal error in coadd_utils.trapezoid: insufficient patch size, n=', n, 'fade_kernel=', fade_kernel)
+    exit()
+  for i in range(2*fade_kernel):
+    s = (i+1)/(2*fade_kernel+1)
+    ar[   i,   :] *= s
+    ar[-1-i,   :] *= s
+    ar[   :,   i] *= s
+    ar[   :,-1-i] *= s
+  return ar
