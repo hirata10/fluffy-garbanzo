@@ -1,0 +1,32 @@
+# configuration file for the test script (you can copy/modify to experiment with it)
+
+# wavelength [um]
+LAMBDA: 1.29
+
+# number of dithers
+N: 6
+
+# input and output postage stamp sizes
+INSIZE: 64 64
+OUTSIZE: 50 50
+
+# target sqrt{U/C} (1e-3 is a reasonable choice)
+UCTARGET: 1e-3
+
+# how much Gaussian smoothing (in input pixels) to put in the output image
+EXTRASMOOTH: 0.63
+
+# bad pixel fraction (this script randomly kills pixels)
+BADFRAC: .025
+
+# Optional rolls (in degrees for each exposure) and camera distortions
+# (shear is g1,g2 for each exposure; magnify is for each exposure)
+ROLL: 0 0 0 0 0 0
+SHEAR: 0 0 0 0 0 0 
+MAGNIFY: 0 0 0 0 0 0
+
+# output file prefix
+OUT: /hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_26_roman_psf/out/
+
+# random number generator seed
+RNGSEED: 3000
