@@ -22,7 +22,7 @@ BADFRAC: .025
 # Optional rolls (in degrees for each exposure) and camera distortions
 # (shear is g1,g2 for each exposure; magnify is for each exposure)
 ROLL: 0 0 0 0 0 0
-SHEAR: 0 0 0 0 0 0 
+SHEAR: 0 0 0 0 0 0 0 0 0 0 0 0
 MAGNIFY: 0 0 0 0 0 0
 
 # output file prefix
