@@ -100,7 +100,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     roll = np.fromstring(config['roll'], dtype=int, sep=' ')
     shear = np.fromstring(config['shear'], dtype=int, sep=' ')
     magnify = np.fromstring(config['magnify'], dtype=int, sep=' ')
-    sigout = 
+    # WHAT IS SIGOUT? sigout = 
     badfrac = config['badfrac']
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
@@ -150,10 +150,12 @@ def main(argv):
     ny_tiles = 10
     stamp_xsize = 64
     stamp_ysize = 64
+    print('making an input image...')
     for n in range(config['n_in']):
         image = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, InPSF[n], save_image=True)
         Nimage.append(image)
 
+    sys.exit()
     T = _compute_T(config, InPSF, outpsf='simple')
 
     # Not sure about the step after. 
