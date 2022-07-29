@@ -160,3 +160,7 @@ def main(argv):
 
     # Not sure about the step after. 
     # Just apply the matrix to the input image?
+
+
+if __name__ == "__main__":
+    main(sys.argv)
