@@ -34,7 +34,7 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
     pixel_scale = config['s_in']
     # Let's do point sources first. 
     # gal = galsim.Exponential(flux=1., half_light_radius=0.1)
-    st_model = galsim.DeltaFunction(flux=1.)
+    st_model = galsim.DeltaFunction(flux=1.e4)
     sky_level = 1.e6
     
     # Make an image where postage stamps fall in.
