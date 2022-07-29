@@ -32,8 +32,11 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
 
     random_seed = config['rngseed']
     pixel_scale = config['s_in']
-    gal = galsim.Exponential(flux=1., half_light_radius=0.1)
-    # psf = READ IN ROMAN PSFs. 
+    # Let's do point sources first. 
+    # gal = galsim.Exponential(flux=1., half_light_radius=0.1)
+    st_model = galsim.DeltaFunction(flux=1.)
+    starflux=1.
+    st_model = st_model.withFlux(starflux)
     sky_level = 1.e6
     
     # Make an image where postage stamps fall in.
@@ -53,18 +56,18 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
             sub_psf_image = psf_image[b]
 
             # OPERATION ON gal? - shear, rotation, noise etc.
-            final_gal = galsim.Convolve([psf, gal])
+            final_gal = galsim.Convolve([psf, st_model])
             final_gal.drawImage(sub_gal_image)
 
             # Any noise realization?
-            sky_level_pixel = sky_level * pixel_scale**2
-            noise = galsim.PoissonNoise(ud, sky_level=sky_level_pixel)
-            sub_gal_image.addNoiseSNR(noise, gal_signal_to_noise)
+            # sky_level_pixel = sky_level * pixel_scale**2
+            # noise = galsim.PoissonNoise(ud, sky_level=sky_level_pixel)
+            # sub_gal_image.addNoiseSNR(noise, gal_signal_to_noise)
 
             k = k+1
 
     if save_image:
-        image_fname = os.path.join(config['OUT'], 'galaxy_image_grid.fits')
+        image_fname = os.path.join(config['OUT'], 'star_image_grid.fits')
         gal_image.write(image_fname)
 
     return gal_image
