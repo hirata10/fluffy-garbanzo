@@ -151,8 +151,8 @@ def main(argv):
     Nimage = []
     nx_tiles = 10
     ny_tiles = 10
-    stamp_xsize = 256
-    stamp_ysize = 256
+    stamp_xsize = 64
+    stamp_ysize = 64
     print('making an input image...')
     for n in range(config['n_in']):
         image = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, InPSF[n], save_image=True)
