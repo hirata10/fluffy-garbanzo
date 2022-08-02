@@ -20,11 +20,13 @@ outcoords = EmptyClass() # will fill this in later
 # some default settings
 sigmatarget = 1.5/2.355 # FWHM Gaussian smoothing divided by 2.355 to be a sigma
 npixpsf = 64 # size of PSF postage stamp in native pixels
-instamp_pad = 1.*coadd_utils.arcsec # input stamp size padding
+instamp_pad = 1.055*coadd_utils.arcsec # input stamp size padding
 imcom_smax = 0.2
-imcom_flat_penalty = 1e-4
+imcom_flat_penalty = 1e-6
 fade_kernel = 3 # fading kernel width
 n_inframe = 1; extrainput = [None] # number of input images to stack at once
+permanent_mask = None # no permanent pixel mask
+cr_mask_rate = 0. # CR hit probability for stochastic mask
 
 # Read in information
 config_file = sys.argv[1]
@@ -92,6 +94,14 @@ for line in content:
   # output stem
   m = re.search('^OUT\:\s*(\S+)', line)
   if m: outstem = m.group(1)
+
+  # permanent mask file
+  m = re.search('^PMASK\:\s*(\S+)', line)
+  if m: permanent_mask = {'file': m.group(1)}
+
+  # CR mask rate
+  m = re.search('^CMASK\:\s*(\S+)', line)
+  if m: cr_mask_rate = float(m.group(1))
 
 # --- end configuration file ---
 
@@ -163,6 +173,11 @@ outcoords.centerpos = wcsout.wcs_pix2world(numpy.array([[cornerx[-1],cornery[-1]
 # make basic output array
 out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.float32)
 
+# and the fidelity information
+# (initialize at full fidelity)
+fidelity_map = numpy.zeros((n_out, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.uint8) # store as integer, will be in dB
+fidelity_map[:,:,:] = 255
+
 # and the output PSFs and target leakages
 #
 # (this will have to be modified for multiple outputs)
@@ -211,6 +226,21 @@ sys.stdout.write('done.\n')
 sys.stdout.flush()
 print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
 print('')
+
+# allocate ancillary arrays
+T_weightmap = numpy.zeros((n_out,len(obslist),outcoords.n1P,outcoords.n1P), dtype=numpy.float32)
+
+# load mask information
+if permanent_mask is None:
+  print('No permanent mask')
+else:
+  with fits.open(permanent_mask['file']) as f: permanent_mask['data'] = numpy.where(f[0].data,True,False)
+  print('Permanent mask loaded --> ', numpy.count_nonzero(permanent_mask['data']), 'good pixels', numpy.count_nonzero(permanent_mask['data'])/(18*4088**2)*100, '%')
+if cr_mask_rate>0:
+  cr_mask = numpy.ones((len(obslist),coadd_utils.sca_nside,coadd_utils.sca_nside),dtype=bool)
+  for j in range(len(obslist)): cr_mask[j,:,:] = coadd_utils.randmask(obslist[j], cr_mask_rate)
+else:
+  cr_mask = None
 
 ### Begin loop over all the postage stamps we want to create ###
 
@@ -298,6 +328,18 @@ for ipostage in range(nrun):
     inmask[i_in,:,:] = windows[i_in]['active']
     incube[:,i_in,:,:] = coadd_utils.snap_instamp(in_data[:,j,:,:], windows[i_in])
 
+  # include masks
+  good0 = numpy.count_nonzero(inmask)
+  if permanent_mask is not None:
+    for i_in in range(n_in):
+      inmask[i_in,:,:] = numpy.logical_and(inmask[i_in,:,:], coadd_utils.win_cutout(windows[i_in], permanent_mask['data'][obslist[useList[i_in]][1]-1,:,:], False))
+  good1 = numpy.count_nonzero(inmask)
+  if cr_mask is not None:
+    for i_in in range(n_in):
+      inmask[i_in,:,:] = numpy.logical_and(inmask[i_in,:,:], coadd_utils.win_cutout(windows[i_in], cr_mask[i_in,:,:], False))
+  good2 = numpy.count_nonzero(inmask)
+  print('Mask: {:5d} --> {:5d} --> {:5d} pix'.format(good0,good1,good2))
+
   imcomSysSolve = pyimcom_interface.get_coadd_matrix(psfOverlap, float(inpsf['oversamp']), uctarget, posoffset, distort_matrices,
     coadd_utils.pixscale_native/coadd_utils.arcsec, (insize,insize), outcoords.dtheta*3600, (outcoords.n2f,outcoords.n2f),
     inmask, instamp_pad/coadd_utils.arcsec, imcom_smax, flat_penalty=imcom_flat_penalty)
@@ -316,6 +358,16 @@ for ipostage in range(nrun):
   for v in range(n_inframe):
     out_map[:,v,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] +=\
       wt*(imcomSysSolve['T'].reshape(n_out*outcoords.n2f**2,n_in*insize**2)@incube[v,:,:,:].flatten()).reshape(n_out,outcoords.n2f,outcoords.n2f)
+
+  # weight computations
+  Tsum = numpy.sum(imcomSysSolve['T'], axis=(1,2,4,5))
+  for i_out in range(n_out): Tsum[i_out,:] /= numpy.sum(Tsum[i_out,:])
+  for i_in in range(n_in): T_weightmap[:,useList[i_in],ipostageY,ipostageX] = Tsum[:,i_in]
+
+  # fidelity map
+  this_fidelity_map = numpy.floor(-10*numpy.log10(numpy.clip(imcomSysSolve['UC'],10**(-25.5999),.99999))).astype(numpy.uint8)
+  fidelity_map[:,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] = numpy.minimum(
+    fidelity_map[:,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2], this_fidelity_map)
 
   sys.stdout.flush()
 
@@ -336,10 +388,27 @@ for i1 in range(n_out):
     out_map[i1,i2,:,:] /= coadd_utils.trapezoid(outcoords.NsideP,fade_kernel)
 
 maphdu = fits.PrimaryHDU(out_map[:,:,fade_kernel:-fade_kernel,fade_kernel:-fade_kernel], header=wcsout.to_header())
-hdu_list = fits.HDUList([maphdu])
+config_hdu = fits.TableHDU.from_columns([fits.Column(name='text', array=content, format='A512', ascii=True)])
+config_hdu.header['EXTNAME'] = 'CONFIG'
+inlist_hdu = fits.BinTableHDU.from_columns([
+  fits.Column(name='obsid', array=numpy.array([obslist[j][0] for j in range(len(obslist))]), format='J'),
+  fits.Column(name='sca', array=numpy.array([obslist[j][1] for j in range(len(obslist))]), format='I'),
+  fits.Column(name='ra', array=numpy.array([obsdata['ra'][obslist[j][0]] for j in range(len(obslist))]), format='D', unit='degree'),
+  fits.Column(name='dec', array=numpy.array([obsdata['dec'][obslist[j][0]] for j in range(len(obslist))]), format='D', unit='degree'),
+  fits.Column(name='pa', array=numpy.array([obsdata['pa'][obslist[j][0]] for j in range(len(obslist))]), format='D', unit='degree'),
+  fits.Column(name='valid', array=numpy.array(infile_exists), format='L')
+])
+inlist_hdu.header['EXTNAME'] = 'INDATA'
+T_hdu = fits.ImageHDU(T_weightmap)
+T_hdu.header['EXTNAME'] = 'INWEIGHT'
+T_hdu2 = fits.ImageHDU(numpy.transpose(T_weightmap,axes=(0,2,1,3)).reshape((n_out*outcoords.n1P,len(obslist)*outcoords.n1P)))
+T_hdu2.header['EXTNAME'] = 'INWTFLAT'
+fidelity_hdu = fits.ImageHDU(fidelity_map, header=wcsout.to_header())
+fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
+fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
+hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])
 hdu_list.writeto(outstem+'_map.fits', overwrite=True)
 
 print('')
 print('finished at t =', time.perf_counter(), 's')
 print('')
-

@@ -1,4 +1,6 @@
 import numpy
+import scipy
+from scipy.ndimage import convolve
 import re
 import fitsio
 from fitsio import FITS,FITSHDR
@@ -178,10 +180,40 @@ def genWindow(x,y,insize,wcsin,wcsout):
 
   return {'xmin':xmin, 'xmax':xmax, 'ymin':ymin, 'ymax':ymax, 'xc':xc, 'yc':yc, 'outx':wcspos[0], 'outy':wcspos[1], 'active':activepix}
 
+# make a cutout of an nside x nside array corresponding to a given window
+#
+# Input:
+#   window: the window structure from genWindow
+#   readarray: the array to read from
+#   fillvalue: what to pad material off the array
+#
+def win_cutout(window, readarray, fillvalue):
+  p = numpy.amax([0, -window['xmin'], -window['ymin'], window['xmax']-sca_nside, window['ymax']-sca_nside]) # amount to pad
+  return(numpy.pad(readarray,p,mode='constant', constant_values = fillvalue)[p+window['ymin']:p+window['ymax'],p+window['xmin']:p+window['xmax']])
+
 # makes a snapshot of the frame given by the [ymin:ymax,xmin:xmax] of the window, possibly overlapping the edge
 def snap_instamp(image,window):
   d = max(window['xmax']-window['xmin'], window['ymax']-window['ymin'])
   return numpy.pad(image, ((0,0), (d,d), (d,d)))[:,d+window['ymin']:d+window['ymax'],d+window['xmin']:d+window['xmax']]
+
+# makes a psuedorandom mask that randomly removes groups of pixels (intended for CR simulation)
+#
+# Input:
+#   idsca = tuple (obsid, sca)
+#   pcut = probability that a pixel is hit
+#   hitinfo = dictionary (use None for default)
+#
+def randmask(idsca, pcut, hitinfo=None):
+
+  seed = 100000000 + idsca[0]
+  rng = numpy.random.default_rng(seed)
+  pad = 10
+  g = rng.uniform(size=(18,2*pad+sca_nside,2*pad+sca_nside))[idsca[1]-1,:,:]
+  crhits = numpy.where(g<pcut,1.,0.) # hit mask
+
+  # different ways of making a mask
+  if hitinfo is None:
+    return(numpy.where(convolve(crhits,numpy.ones((3,3)),mode='constant')[pad:-pad,pad:-pad]<.5,True,False))
 
 ### Routines for handling the PSF ###
 
