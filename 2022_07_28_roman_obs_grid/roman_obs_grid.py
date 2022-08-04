@@ -97,11 +97,12 @@ def _compute_T(config, InPSF, posoffset, outpsf='simple'):
     ld = config['lambda']/2.37e6*206265./s_in
     rng = np.random.default_rng(config['rngseed'])
     extbdy = config['extbdy']
+    cd = .3 # charge diffusion, rms per axis in pixels
 
     # Leakage
     uctarget = config['uctarget']
     flat_penalty = config['flat_penalty']
-
+    sigout       = np.sqrt(1./12.+cd**2)
 
     # ROLL, SHEAR, MAGNIFY
     roll = np.fromstring(config['roll'], dtype=int, sep=' ')
