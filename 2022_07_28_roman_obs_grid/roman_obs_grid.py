@@ -42,6 +42,12 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
                               scale=pixel_scale)
     psf_image = galsim.ImageF(stamp_xsize * nx_tiles-1 , stamp_ysize * ny_tiles-1,
                               scale=pixel_scale)
+    
+    rng = np.random.default_rng(random_seed)
+    f = np.zeros((2,))
+    f[0] = rng.random()
+    f[1] = rng.random()
+    offset = (f[0],f[1])
     k = 0
     for iy in range(ny_tiles):
         for ix in range(nx_tiles):
@@ -55,7 +61,7 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
 
             # OPERATION ON gal? - shear, rotation, noise etc.
             final_gal = galsim.Convolve([psf, st_model])
-            final_gal.drawImage(sub_gal_image)
+            final_gal.drawImage(sub_gal_image, offset=offset)
 
             # Any noise realization?
             # sky_level_pixel = sky_level * pixel_scale**2
@@ -68,7 +74,7 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
         image_fname = os.path.join(config['OUT'], 'star_image_grid.fits')
         gal_image.write(image_fname)
 
-    return gal_image
+    return gal_image, offset
 
 def _compute_T(config, InPSF, outpsf='simple'): 
     """Returns a transformation matrix T.
@@ -149,14 +155,16 @@ def main(argv):
     InPSF = [roman_psf_gsobj for n in range(6)]
 
     Nimage = []
+    pos_offset = []
     nx_tiles = 10
     ny_tiles = 10
     stamp_xsize = 64
     stamp_ysize = 64
     print('making an input image...')
     for n in range(config['n_in']):
-        image = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, InPSF[n], save_image=True)
+        image, off = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, InPSF[n], save_image=False)
         Nimage.append(image)
+        pos_offset.append(off)
 
     sys.exit()
     T = _compute_T(config, InPSF, outpsf='simple')
