@@ -167,7 +167,7 @@ def main(argv):
         pos_offset.append(off)
 
     # sys.exit()
-    T = _compute_T(config, InPSF, outpsf='simple')
+    T = _compute_T(config, InPSF, pos_offset, outpsf='simple')
     print(T)
 
     # Not sure about the step after. 
