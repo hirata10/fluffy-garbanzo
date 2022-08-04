@@ -76,7 +76,7 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
 
     return gal_image, offset
 
-def _compute_T(config, InPSF, outpsf='simple'): 
+def _compute_T(config, InPSF, posoffset, outpsf='simple'): 
     """Returns a transformation matrix T.
     
     Parameters
@@ -107,7 +107,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     roll = np.fromstring(config['roll'], dtype=int, sep=' ')
     shear = np.fromstring(config['shear'], dtype=int, sep=' ')
     magnify = np.fromstring(config['magnify'], dtype=int, sep=' ')
-    # WHAT IS SIGOUT? sigout = 
+    sigout = config['sigout']
     badfrac = config['badfrac']
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
@@ -118,11 +118,11 @@ def _compute_T(config, InPSF, outpsf='simple'):
         mlist += [pyimcom_interface.rotmatrix(roll[k])@pyimcom_interface.shearmatrix(shear[2*k],shear[2*k+1])/(1.+magnify[k])]
         
         # positional offsets
-        f = np.zeros((2,))
-        f[0] = rng.random()
-        f[1] = rng.random()
-        Mf = s_in*mlist[k]@f
-        posoffset += [(Mf[0],Mf[1])]
+        # f = np.zeros((2,))
+        # f[0] = rng.random()
+        # f[1] = rng.random()
+        # Mf = s_in*mlist[k]@f
+        # posoffset += [(Mf[0],Mf[1])]
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
@@ -166,8 +166,9 @@ def main(argv):
         Nimage.append(image)
         pos_offset.append(off)
 
-    sys.exit()
+    # sys.exit()
     T = _compute_T(config, InPSF, outpsf='simple')
+    print(T)
 
     # Not sure about the step after. 
     # Just apply the matrix to the input image?
