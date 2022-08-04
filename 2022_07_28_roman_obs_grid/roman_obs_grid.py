@@ -108,7 +108,6 @@ def _compute_T(config, InPSF, posoffset, outpsf='simple'):
     roll = np.fromstring(config['roll'], dtype=int, sep=' ')
     shear = np.fromstring(config['shear'], dtype=int, sep=' ')
     magnify = np.fromstring(config['magnify'], dtype=int, sep=' ')
-    sigout = config['sigout']
     badfrac = config['badfrac']
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
