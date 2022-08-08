@@ -151,8 +151,8 @@ def main(argv):
     # READ-IN Roman PSFs.
     # roman_psf = fio.FITS('/hpc/group/cosmology/masaya/imcom_phase1/input_1x1arcmin/psf/dc2_psf_100659.fits.gz')[1].read()
     roman_psf = galsim.fits.read('/hpc/group/cosmology/masaya/imcom_phase1/input_1x1arcmin/psf/dc2_psf_100659.fits.gz', hdu=1)
-    roman_psf_gsobj = galsim.InterpolatedImage(roman_psf, x_interpolant='lanczos15')
-    InPSF = [roman_psf_gsobj for n in range(6)]
+    roman_psf_gsobj = galsim.InterpolatedImage(roman_psf, x_interpolant='lanczos3')
+    interpolated_psf = [roman_psf_gsobj for n in range(6)]
 
     Nimage = []
     pos_offset = []
@@ -162,11 +162,12 @@ def main(argv):
     stamp_ysize = 64
     print('making an input image...')
     for n in range(config['n_in']):
-        image, off = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, InPSF[n], save_image=False)
+        image, off = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, interpolated_psf[n], save_image=False)
         Nimage.append(image)
         pos_offset.append(off)
 
     # sys.exit()
+    InPSF = [roman_psf_gsobj.image for n in range(6)]
     T = _compute_T(config, InPSF, pos_offset, outpsf='simple')
     print(T)
 
