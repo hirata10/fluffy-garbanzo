@@ -168,6 +168,7 @@ def main(argv):
 
     # sys.exit()
     InPSF = [roman_psf_gsobj.image for n in range(6)]
+    print(len(InPSF), InPSF)
     T = _compute_T(config, InPSF, pos_offset, outpsf='simple')
     print(T)
 
