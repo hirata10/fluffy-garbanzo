@@ -183,10 +183,6 @@ def main(argv):
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
     T, ImOutPSF, ctrpos, mlist = _compute_T(config, ImInPSF, outpsf='simple')
-    np.save('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/ctrpos.npy', np.array(ctrpos))
-    np.save('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/mlist.npy', np.array(mlist))
-    print(T)
-    sys.exit()
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations for the grid of point sources in global coordinates (coadd coordinates)
@@ -197,6 +193,7 @@ def main(argv):
     out_stamp_ctr = (nx_out-1)/2.
     grid = np.linspace(xy_min+out_stamp_ctr, xy_max-out_stamp_ctr, steps)
     x_mesh, y_mesh = np.meshgrid(grid, grid)
+    positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
 
     # (b) map these to (x,y) in the input images
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
@@ -213,21 +210,27 @@ def main(argv):
     for ipsf in range(n_in):
         M_inv = np.linalg.inv(s_in*mlist[ipsf])
         # locations of point sources in i-th input frame
-        px = M_inv[0,0]*(x_mesh - ctrpos[ipsf][0]) + M_inv[0,1]*(y_mesh - ctrpos[ipsf][1]) + xctr
-        py = M_inv[1,0]*(x_mesh - ctrpos[ipsf][0]) + M_inv[1,1]*(y_mesh - ctrpos[ipsf][1]) + yctr
+        px = M_inv[0,0]*(positions[0,:] - ctrpos[ipsf][0]) + M_inv[0,1]*(positions[1,:] - ctrpos[ipsf][1]) + xctr
+        py = M_inv[1,0]*(positions[0,:] - ctrpos[ipsf][0]) + M_inv[1,1]*(positions[1,:] - ctrpos[ipsf][1]) + yctr
 
         # (c) draw stars with unit flux at those locations
         im_size = nx_in * steps
         gal_image = galsim.ImageF(im_size, im_size, scale=s_in)
         print('making an ', ipsf,'-th input image...')
-        for n in range(config['n_in']):
-            for x_loc, y_loc in zip(px, py):
-                b = galsim.BoundsI(ix*stamp_xsize+1 , (ix+1)*stamp_xsize-1,
-                                iy*stamp_ysize+1 , (iy+1)*stamp_ysize-1)
-                sub_gal_image = gal_image[b]
-                st_model = galsim.DeltaFunction(flux=1.)
-                final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
-                final_gal.drawImage(sub_gal_image)
+        for n in range(len(px)):
+            xy = galsim.PositionD(px[n], py[n])
+            xyI = xy.round()
+            draw_offset = xy - xyI
+            b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
+                                ymin=xyI.y-int(ny_in/2)+1,
+                                xmax=xyI.x+int(nx_in/2),
+                                ymax=xyI.y+int(ny_in/2))
+            sub_gal_image = gal_image[b]
+            st_model = galsim.DeltaFunction(flux=1.)
+            final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
+            final_gal.drawImage(sub_gal_image, offset=draw_offset)
+        image_fname = os.path.join(config['OUT'], 'star_image_grid_updated.fits')
+        gal_image.write(image_fname)
 
     # (d) feed those images to the image co-addition
     print('coadding images...')
