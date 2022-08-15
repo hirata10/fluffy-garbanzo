@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 
-def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, save_image=False):
+def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, offset, save_image=False):
     """Returns an image with a grid of postage stamps.
     
     Parameters
@@ -43,11 +43,6 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
     psf_image = galsim.ImageF(stamp_xsize * nx_tiles-1 , stamp_ysize * ny_tiles-1,
                               scale=pixel_scale)
     
-    rng = np.random.default_rng(random_seed)
-    f = np.zeros((2,))
-    f[0] = rng.random()
-    f[1] = rng.random()
-    offset = (f[0],f[1])
     k = 0
     for iy in range(ny_tiles):
         for ix in range(nx_tiles):
@@ -76,7 +71,7 @@ def _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, psf, 
 
     return gal_image, offset
 
-def _compute_T(config, InPSF, posoffset, outpsf='simple'): 
+def _compute_T(config, InPSF, outpsf='simple'): 
     """Returns a transformation matrix T.
     
     Parameters
@@ -113,16 +108,15 @@ def _compute_T(config, InPSF, posoffset, outpsf='simple'):
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
 
     mlist = []
-    posoffset = []
+    ctrpos_offset = [] # The center of the postage stamp in image coordinates of the output image (which is centered at (0,0)), meaning that this is the dither offset relative to the center of the image.
     for k in range(n_in):
         mlist += [pyimcom_interface.rotmatrix(roll[k])@pyimcom_interface.shearmatrix(shear[2*k],shear[2*k+1])/(1.+magnify[k])]
-        
-        # positional offsets
-        # f = np.zeros((2,))
-        # f[0] = rng.random()
-        # f[1] = rng.random()
-        # Mf = s_in*mlist[k]@f
-        # posoffset += [(Mf[0],Mf[1])]
+
+        f = np.zeros((2,))
+        f[0] = rng.random()
+        f[1] = rng.random()
+        Mf = s_in*mlist[k]@f
+        ctrpos_offset += [(Mf[0],Mf[1])]
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
@@ -138,9 +132,40 @@ def _compute_T(config, InPSF, posoffset, outpsf='simple'):
         print(np.shape(inmask))
 
     # Compute coadd matrix. 
-    ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], posoffset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
+    ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], ctrpos_offset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
 
-    return ims['T']
+    return ims['T'], OutPSF, ctrpos_offset, mlist
+
+def _coadd_image(T, psf_in_list, psf_out_list, image_in_list, config):
+
+    (n_out,ny_out,nx_out,n_in,ny_in,nx_in) = np.shape(T)
+
+    # center pixel of input stamps (non-galsim coordinates)
+    xctr = (nx_in-1)/2.; yctr = (ny_in-1)/2.
+
+    # What needs to be done to set up input image array? 
+    # Step 1. Make an input image array, instead of input stamp array. (image_in_list[n].array.shape)
+    # Step 2. 
+    # Do I have to use the oversampled PSF? 
+    # Do I have to apply the same distortion matrix to the input image? 
+
+    """
+    # make input stamp array
+    in_array = np.zeros((n_in,ny_in,nx_in))
+
+    p = 5 # pad length
+
+    # make the input stamps
+    """
+    # --- end construction of the input images ---
+
+    # What needs to be done to set up output+output_target image array? 
+    # Step 1. 
+    # Step 2. 
+
+
+
+    return (in_array,out_array,out_array-target_out_array)
 
 def main(argv):
 
@@ -155,25 +180,58 @@ def main(argv):
     interpolated_psf = [roman_psf_gsobj for n in range(config['n_in'])]
     ImInPSF = [roman_psf_gsobj.image.array for n in range(config['n_in'])]
 
-    Nimage = []
-    pos_offset = []
-    nx_tiles = 10
-    ny_tiles = 10
-    stamp_xsize = 64
-    stamp_ysize = 64
-    print('making an input image...')
-    for n in range(config['n_in']):
-        image, off = _make_grid_image(nx_tiles, ny_tiles, stamp_xsize, stamp_ysize, config, interpolated_psf[n], save_image=False)
-        Nimage.append(image)
-        pos_offset.append(off)
-
-    # sys.exit()
-    T = _compute_T(config, ImInPSF, pos_offset, outpsf='simple')
+    # Same transformation matrix as testdither.py
+    # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
+    T, ImOutPSF, ctrpos, mlist = _compute_T(config, ImInPSF, outpsf='simple')
+    np.save('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/ctrpos.npy', np.array(ctrpos))
+    np.save('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/mlist.npy', np.array(mlist))
     print(T)
+    sys.exit()
 
-    # Not sure about the step after. 
-    # Just apply the matrix to the input image?
+    # Similar steps to test_psf_inject() but with a grid. 
+    # (a) make a list of locations for the grid of point sources in global coordinates (coadd coordinates)
+    nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
+    steps = 10 # number of stamps in a row
+    xy_min = -steps/2. * nx_out
+    xy_max = steps/2. * nx_out
+    out_stamp_ctr = (nx_out-1)/2.
+    grid = np.linspace(xy_min+out_stamp_ctr, xy_max-out_stamp_ctr, steps)
+    x_mesh, y_mesh = np.meshgrid(grid, grid)
 
+    # (b) map these to (x,y) in the input images
+    nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
+    n_in = config['n_in']
+    n1 = config['n1']
+    nps = config['nps']
+    s_in = config['s_in']
+    s_out = config['s_out']
+    xctr = (nx_in-1)/2.; yctr = (ny_in-1)/2.
+    # make input stamp array
+    in_array = np.zeros((n_in,ny_in,nx_in))
+    p = 5 # pad length
+
+    for ipsf in range(n_in):
+        M_inv = np.linalg.inv(s_in*mlist[ipsf])
+        # locations of point sources in i-th input frame
+        px = M_inv[0,0]*(x_mesh - ctrpos[ipsf][0]) + M_inv[0,1]*(y_mesh - ctrpos[ipsf][1]) + xctr
+        py = M_inv[1,0]*(x_mesh - ctrpos[ipsf][0]) + M_inv[1,1]*(y_mesh - ctrpos[ipsf][1]) + yctr
+
+        # (c) draw stars with unit flux at those locations
+        im_size = nx_in * steps
+        gal_image = galsim.ImageF(im_size, im_size, scale=s_in)
+        print('making an ', ipsf,'-th input image...')
+        for n in range(config['n_in']):
+            for x_loc, y_loc in zip(px, py):
+                b = galsim.BoundsI(ix*stamp_xsize+1 , (ix+1)*stamp_xsize-1,
+                                iy*stamp_ysize+1 , (iy+1)*stamp_ysize-1)
+                sub_gal_image = gal_image[b]
+                st_model = galsim.DeltaFunction(flux=1.)
+                final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
+                final_gal.drawImage(sub_gal_image)
+
+    # (d) feed those images to the image co-addition
+    print('coadding images...')
+    in_array, out_array, error_array = _coadd_image(T, ImInPSF, ImOutPSF, Nimage, config)
 
 if __name__ == "__main__":
     main(sys.argv)
