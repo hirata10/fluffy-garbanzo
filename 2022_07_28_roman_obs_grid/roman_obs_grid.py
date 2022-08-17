@@ -235,16 +235,17 @@ def main(argv):
     qy = (input_imsize-ny_in+1)/2.
     qx = (input_imsize-nx_in+1)/2.
     print(in_array[:,qy:-qy,qx:-qx].shape)
-    image_fname = os.path.join(config['OUT'], 'star_image_grid_inner.fits')
-    in_array[:,qy:-qy,qx:-qx].write(image_fname)
-    sys.exit()
-    p = 5 # pad length
+    image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
+    fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
+
     # (d) feed those images to the image co-addition
     print('coadding images...')
     qy = (input_imsize - ny_in)/2.
     qx = (input_imsize - nx_in)/2.
     out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array[:,qy:-qy,qx:-qx].flatten()).reshape(n_out,ny_out,nx_out)
     
+    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out.fits'), overwrite=True)
+    print('done')
     
 
 if __name__ == "__main__":
