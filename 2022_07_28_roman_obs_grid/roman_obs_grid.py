@@ -162,10 +162,9 @@ def main(argv):
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
-    if not os.path.exists(os.path.join(config['OUT'], 'T.fits')):
-        T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
-        hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
-        hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
+    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+    # hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
+    # hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations of point sources in input frame
