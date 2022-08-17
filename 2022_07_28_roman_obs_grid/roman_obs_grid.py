@@ -134,38 +134,8 @@ def _compute_T(config, InPSF, outpsf='simple'):
     # Compute coadd matrix. 
     ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], ctrpos_offset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
 
-    return ims['T'], OutPSF, ctrpos_offset, mlist
+    return ims['T'], OutPSF, ctrpos_offset, mlist, inmask
 
-def _coadd_image(T, psf_in_list, psf_out_list, image_in_list, config):
-
-    (n_out,ny_out,nx_out,n_in,ny_in,nx_in) = np.shape(T)
-
-    # center pixel of input stamps (non-galsim coordinates)
-    xctr = (nx_in-1)/2.; yctr = (ny_in-1)/2.
-
-    # What needs to be done to set up input image array? 
-    # Step 1. Make an input image array, instead of input stamp array. (image_in_list[n].array.shape)
-    # Step 2. 
-    # Do I have to use the oversampled PSF? 
-    # Do I have to apply the same distortion matrix to the input image? 
-
-    """
-    # make input stamp array
-    in_array = np.zeros((n_in,ny_in,nx_in))
-
-    p = 5 # pad length
-
-    # make the input stamps
-    """
-    # --- end construction of the input images ---
-
-    # What needs to be done to set up output+output_target image array? 
-    # Step 1. 
-    # Step 2. 
-
-
-
-    return (in_array,out_array,out_array-target_out_array)
 
 def main(argv):
 
@@ -182,43 +152,51 @@ def main(argv):
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
-    T, ImOutPSF, ctrpos, mlist = _compute_T(config, ImInPSF, outpsf='simple')
+    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
 
-    # Similar steps to test_psf_inject() but with a grid. 
-    # (a) make a list of locations for the grid of point sources in global coordinates (coadd coordinates)
-    nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
-    steps = 10 # number of stamps in a row
-    xy_min = -steps/2. * nx_out
-    xy_max = steps/2. * nx_out
-    out_stamp_ctr = (nx_out-1)/2.
-    grid = np.linspace(xy_min+out_stamp_ctr, xy_max-out_stamp_ctr, steps)
-    x_mesh, y_mesh = np.meshgrid(grid, grid)
-    positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
 
-    # (b) map these to (x,y) in the input images
+    # input and output image config
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
+    nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
     n_in = config['n_in']
     n1 = config['n1']
     nps = config['nps']
     s_in = config['s_in']
     s_out = config['s_out']
-    xctr = (nx_in-1)/2.; yctr = (ny_in-1)/2.
-    # make input stamp array
-    in_array = np.zeros((n_in,ny_in,nx_in))
-    p = 5 # pad length
 
+    # Similar steps to test_psf_inject() but with a grid. 
+    # (a) make a list of locations of point sources in input frame
+    steps = 10 # number of stamps in a row
+    input_imsize = nx_in * steps # grid size
+    output_imsize = input_imsize * (s_in/s_out)
+    stamp_ctr = (nx_in-1)/2.
+    grid = np.linspace(0+stamp_ctr, input_imsize-stamp_ctr, steps)
+    x_mesh, y_mesh = np.meshgrid(grid, grid)
+    positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
+
+    # (b) map these to (x,y) to world coordinates
+    input_wcs = galsim.PixelScale(s_in)
+    world_pos = input_wcs.toWorld(positions[0,:], positions[1,:])
+
+    # (c) map these back to the locations in output frame
+    out_ctr = (output_imsize-1)/2. 
+    output_wcs = galsim.PixelScale(s_out)
+    srcpos = output_wcs.toImage(world_pos[0], world_pos[1])
+    out_srcpos_x = srcpos[0] - out_ctr
+    out_srcpos_y = srcpos[1] - out_ctr
+
+    # input image array
+    in_array = np.zeros((n_in, input_imsize, input_imsize))
+    image_list = []
+    # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
-        M_inv = np.linalg.inv(s_in*mlist[ipsf])
-        # locations of point sources in i-th input frame
-        px = M_inv[0,0]*(positions[0,:] - ctrpos[ipsf][0]) + M_inv[0,1]*(positions[1,:] - ctrpos[ipsf][1]) + xctr
-        py = M_inv[1,0]*(positions[0,:] - ctrpos[ipsf][0]) + M_inv[1,1]*(positions[1,:] - ctrpos[ipsf][1]) + yctr
-
-        # (c) draw stars with unit flux at those locations
-        im_size = nx_in * steps
-        gal_image = galsim.ImageF(im_size, im_size, scale=s_in)
+        posx = positions[0,:]+ctrpos[ipsf][0]
+        posy = positions[1,:]+ctrpos[ipsf][1]
+        
+        gal_image = galsim.ImageF(input_imsize+1, input_imsize+1, scale=s_in)
         print('making an ', ipsf,'-th input image...')
-        for n in range(len(px)):
-            xy = galsim.PositionD(px[n], py[n])
+        for n in range(len(posx)):
+            xy = galsim.PositionD(posx[n], posy[n])
             xyI = xy.round()
             draw_offset = xy - xyI
             b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
@@ -229,12 +207,20 @@ def main(argv):
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
-        image_fname = os.path.join(config['OUT'], 'star_image_grid_updated.fits')
-        gal_image.write(image_fname)
+            image_list.append(gal_image)
+        in_array[ipsf,:,:] = gal_image.array
+        # image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
+        # gal_image.write(image_fname)
 
+        if inmask is not None:
+            in_array = np.where(inmask, in_array, 0.)
+
+    p = 5 # pad length
     # (d) feed those images to the image co-addition
     print('coadding images...')
-    in_array, out_array, error_array = _coadd_image(T, ImInPSF, ImOutPSF, Nimage, config)
+    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array.flatten()).reshape(n_out,ny_out,nx_out)
+    
+    
 
 if __name__ == "__main__":
     main(sys.argv)
