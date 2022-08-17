@@ -173,6 +173,7 @@ def main(argv):
     input_imsize = nx_in * steps # grid size
     output_imsize = input_imsize * (s_in/s_out)
     stamp_ctr = (nx_in-1)/2.
+    in_ctr = (input_imsize-1)/2. 
     grid = np.linspace(0+stamp_ctr, input_imsize-stamp_ctr, steps)
     x_mesh, y_mesh = np.meshgrid(grid, grid)
     positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
@@ -207,13 +208,15 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in/2)+1,
                                 xmax=xyI.x+int(nx_in/2),
                                 ymax=xyI.y+int(ny_in/2))
-            if xyI.x>0 and xyI.y>0:
+            qx = xyI.x-in_ctr
+            qy = xyI.y-in_ctr
+            if qx>0 and qy>0:
                 b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
-            elif xyI.x<0 and xyI.y>0:
+            elif qx<0 and qy>0:
                 b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
-            elif xyI.x<0 and xyI.y<0:
+            elif qx<0 and qy<0:
                 b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
-            elif xyI.x>0 and xyI.y<0:
+            elif qx>0 and qy<0:
                 b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
             else:
                 print('somethings wrong when overlapping the stamp bounds.')
