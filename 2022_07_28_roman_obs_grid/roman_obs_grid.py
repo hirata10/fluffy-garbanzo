@@ -159,6 +159,7 @@ def main(argv):
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
     n_in = config['n_in']
+    n_out = config['n_out']
     n1 = config['n1']
     nps = config['nps']
     s_in = config['s_in']
@@ -173,6 +174,7 @@ def main(argv):
     grid = np.linspace(0+stamp_ctr, input_imsize-stamp_ctr, steps)
     x_mesh, y_mesh = np.meshgrid(grid, grid)
     positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
+    dx = nx_in/4.; dy = ny_in/4. # how much overlap of the stamp bounds do we want? 
 
     # (b) map these to (x,y) to world coordinates
     input_wcs = galsim.PixelScale(s_in)
@@ -203,22 +205,41 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in/2)+1,
                                 xmax=xyI.x+int(nx_in/2),
                                 ymax=xyI.y+int(ny_in/2))
-            sub_gal_image = gal_image[b]
+            if xyI.x>0 and xyI.y>0:
+                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
+            elif xyI.x<0 and xyI.y>0:
+                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
+            elif xyI.x<0 and xyI.y<0:
+                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
+            elif xyI.x>0 and xyI.y<0:
+                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
+            else:
+                print('somethings wrong when overlapping the stamp bounds.')
+            
+            sub_gal_image = gal_image[b2]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
-        # image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
-        # gal_image.write(image_fname)
+        image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
+        gal_image.write(image_fname)
 
         if inmask is not None:
             in_array = np.where(inmask, in_array, 0.)
-
+    
+    qy = (input_imsize-ny_in+1)/2.
+    qx = (input_imsize-nx_in+1)/2.
+    print(in_array[:,qy:-qy,qx:-qx].shape)
+    image_fname = os.path.join(config['OUT'], 'star_image_grid_inner.fits')
+    in_array[:,qy:-qy,qx:-qx].write(image_fname)
+    sys.exit()
     p = 5 # pad length
     # (d) feed those images to the image co-addition
     print('coadding images...')
-    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array.flatten()).reshape(n_out,ny_out,nx_out)
+    qy = (input_imsize - ny_in)/2.
+    qx = (input_imsize - nx_in)/2.
+    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array[:,qy:-qy,qx:-qx].flatten()).reshape(n_out,ny_out,nx_out)
     
     
 
