@@ -152,8 +152,10 @@ def main(argv):
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
-    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
-
+    if not os.path.exists(os.path.join(config['OUT'], 'T.fits')):
+        T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+        hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
+        hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
 
     # input and output image config
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
@@ -215,7 +217,7 @@ def main(argv):
                 b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
             else:
                 print('somethings wrong when overlapping the stamp bounds.')
-            
+            print(b, b2)
             sub_gal_image = gal_image[b2]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
