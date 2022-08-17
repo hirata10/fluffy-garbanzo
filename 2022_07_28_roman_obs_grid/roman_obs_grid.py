@@ -150,13 +150,6 @@ def main(argv):
     interpolated_psf = [roman_psf_gsobj for n in range(config['n_in'])]
     ImInPSF = [roman_psf_gsobj.image.array for n in range(config['n_in'])]
 
-    # Same transformation matrix as testdither.py
-    # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
-    if not os.path.exists(os.path.join(config['OUT'], 'T.fits')):
-        T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
-        hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
-        hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
-
     # input and output image config
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
@@ -166,6 +159,13 @@ def main(argv):
     nps = config['nps']
     s_in = config['s_in']
     s_out = config['s_out']
+
+    # Same transformation matrix as testdither.py
+    # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
+    if not os.path.exists(os.path.join(config['OUT'], 'T.fits')):
+        T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+        hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
+        hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations of point sources in input frame
