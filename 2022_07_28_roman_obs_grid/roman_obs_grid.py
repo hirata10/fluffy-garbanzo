@@ -240,8 +240,6 @@ def main(argv):
 
     # (d) feed those images to the image co-addition
     print('coadding images...')
-    qy = (input_imsize - ny_in)/2.
-    qx = (input_imsize - nx_in)/2.
     out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array[:,qy:-qy,qx:-qx].flatten()).reshape(n_out,ny_out,nx_out)
     
     hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out.fits'), overwrite=True)
