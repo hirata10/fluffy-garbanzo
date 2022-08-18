@@ -223,14 +223,14 @@ def main(argv):
             sub_gal_image = gal_image[b2]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
-            final_gal.drawImage(sub_gal_image, offset=draw_offset)
+            final_gal.drawImage(sub_gal_image, offset=draw_offset, add_to_image=True)
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
         image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
         gal_image.write(image_fname)
     
-    qy = (input_imsize-ny_in+1)/2.
-    qx = (input_imsize-nx_in+1)/2.
+    qy = (input_imsize-ny_in+1)//2.
+    qx = (input_imsize-nx_in+1)//2.
     in_array_center = in_array[:,qy:-qy,qx:-qx]
     print(in_array_center.shape)
     if inmask is not None:
