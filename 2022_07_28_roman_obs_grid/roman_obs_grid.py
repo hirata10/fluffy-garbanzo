@@ -229,8 +229,8 @@ def main(argv):
         image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
         gal_image.write(image_fname)
     
-    qy = (input_imsize-ny_in+1)//2.
-    qx = (input_imsize-nx_in+1)//2.
+    qy = (input_imsize-ny_in+1)//2
+    qx = (input_imsize-nx_in+1)//2
     in_array_center = in_array[:,qy:-qy,qx:-qx]
     print(in_array_center.shape)
     if inmask is not None:
