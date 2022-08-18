@@ -159,6 +159,7 @@ def main(argv):
     nps = config['nps']
     s_in = config['s_in']
     s_out = config['s_out']
+    save_image = sys.argv[1]
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
@@ -226,8 +227,9 @@ def main(argv):
             final_gal.drawImage(sub_gal_image, offset=draw_offset, add_to_image=True)
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
-        image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
-        gal_image.write(image_fname)
+        if save_image:
+            image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
+            gal_image.write(image_fname)
     
     qy = (input_imsize-ny_in+1)//2
     qx = (input_imsize-nx_in+1)//2
@@ -235,12 +237,14 @@ def main(argv):
     print(in_array_center.shape)
     if inmask is not None:
         in_array_center = np.where(inmask, in_array_center, 0.)
-    image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
-    fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
+
+    if save_image:
+        image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
+        fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
 
     # (d) feed those images to the image co-addition
     print('coadding images...')
-    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array[:,qy:-qy,qx:-qx].flatten()).reshape(n_out,ny_out,nx_out)
+    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array_center.flatten()).reshape(n_out,ny_out,nx_out)
     
     hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out.fits'), overwrite=True)
     print('done')
