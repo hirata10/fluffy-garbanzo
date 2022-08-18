@@ -208,6 +208,7 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in/2)+1,
                                 xmax=xyI.x+int(nx_in/2),
                                 ymax=xyI.y+int(ny_in/2))
+            # Attempt to move the bounds towards center
             qx = xyI.x-(in_ctr+1) # in_ctr is in numpy coordinates
             qy = xyI.y-(in_ctr+1) # in_ctr is in numpy coordinates
             if qx>0 and qy>0:
