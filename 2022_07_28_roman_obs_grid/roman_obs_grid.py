@@ -207,20 +207,20 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in/2)+1,
                                 xmax=xyI.x+int(nx_in/2),
                                 ymax=xyI.y+int(ny_in/2))
-            # qx = xyI.x-in_ctr
-            # qy = xyI.y-in_ctr
-            # if qx>0 and qy>0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
-            # elif qx<0 and qy>0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
-            # elif qx<0 and qy<0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
-            # elif qx>0 and qy<0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
-            # else:
-            #     print('somethings wrong when overlapping the stamp bounds.')
+            qx = xyI.x-(in_ctr+1) # in_ctr is in numpy coordinates
+            qy = xyI.y-(in_ctr+1) # in_ctr is in numpy coordinates
+            if qx>0 and qy>0:
+                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
+            elif qx<0 and qy>0:
+                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
+            elif qx<0 and qy<0:
+                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
+            elif qx>0 and qy<0:
+                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
+            else:
+                print('somethings wrong when overlapping the stamp bounds.')
 
-            sub_gal_image = gal_image[b]
+            sub_gal_image = gal_image[b2]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
@@ -228,13 +228,13 @@ def main(argv):
         in_array[ipsf,:,:] = gal_image.array
         image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
         gal_image.write(image_fname)
-
-        if inmask is not None:
-            in_array = np.where(inmask, in_array, 0.)
     
     qy = (input_imsize-ny_in+1)/2.
     qx = (input_imsize-nx_in+1)/2.
-    print(in_array[:,qy:-qy,qx:-qx].shape)
+    in_array_center = in_array[:,qy:-qy,qx:-qx]
+    print(in_array_center.shape)
+    if inmask is not None:
+        in_array_center = np.where(inmask, in_array_center, 0.)
     image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
     fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
 
