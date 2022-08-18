@@ -173,7 +173,7 @@ def main(argv):
     output_imsize = input_imsize * (s_in/s_out)
     stamp_ctr = (nx_in-1)/2.
     in_ctr = (input_imsize-1)/2. 
-    grid = np.linspace(0+stamp_ctr, input_imsize-stamp_ctr, steps)
+    grid = [stamp_ctr + i*nx_in for i in range(steps)]
     x_mesh, y_mesh = np.meshgrid(grid, grid)
     positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
     dx = nx_in/4.; dy = ny_in/4. # how much overlap of the stamp bounds do we want? 
@@ -197,7 +197,7 @@ def main(argv):
         posx = positions[0,:]+ctrpos[ipsf][0]
         posy = positions[1,:]+ctrpos[ipsf][1]
         
-        gal_image = galsim.ImageF(input_imsize+1, input_imsize+1, scale=s_in)
+        gal_image = galsim.ImageF(input_imsize, input_imsize, scale=s_in)
         print('making an ', ipsf,'-th input image...')
         for n in range(len(posx)):
             xy = galsim.PositionD(posx[n], posy[n])
@@ -207,20 +207,20 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in/2)+1,
                                 xmax=xyI.x+int(nx_in/2),
                                 ymax=xyI.y+int(ny_in/2))
-            qx = xyI.x-in_ctr
-            qy = xyI.y-in_ctr
-            if qx>0 and qy>0:
-                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
-            elif qx<0 and qy>0:
-                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
-            elif qx<0 and qy<0:
-                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
-            elif qx>0 and qy<0:
-                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
-            else:
-                print('somethings wrong when overlapping the stamp bounds.')
-            print(b, b2)
-            sub_gal_image = gal_image[b2]
+            # qx = xyI.x-in_ctr
+            # qy = xyI.y-in_ctr
+            # if qx>0 and qy>0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
+            # elif qx<0 and qy>0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
+            # elif qx<0 and qy<0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
+            # elif qx>0 and qy<0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
+            # else:
+            #     print('somethings wrong when overlapping the stamp bounds.')
+
+            sub_gal_image = gal_image[b]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
