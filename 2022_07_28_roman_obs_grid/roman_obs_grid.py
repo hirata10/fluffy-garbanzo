@@ -196,8 +196,8 @@ def main(argv):
     image_list = []
     # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
-        posx = positions[0,:]+ctrpos[ipsf][0]/s_in
-        posy = positions[1,:]+ctrpos[ipsf][1]/s_in
+        posx = positions[0,:]-ctrpos[ipsf][0]/s_in
+        posy = positions[1,:]-ctrpos[ipsf][1]/s_in
         
         gal_image = galsim.ImageF(input_imsize, input_imsize, scale=s_in)
         print('making an ', ipsf,'-th input image...')
