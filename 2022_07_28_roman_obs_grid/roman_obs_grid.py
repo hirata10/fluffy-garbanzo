@@ -85,6 +85,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     
     """
     n_in = config['n_in']
+    n_out = config['n_out']
     n1 = config['n1']
     nps = config['nps']
     s_in = config['s_in']
@@ -134,6 +135,9 @@ def _compute_T(config, InPSF, outpsf='simple'):
     # Compute coadd matrix. 
     ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], ctrpos_offset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
 
+    hdu = fits.PrimaryHDU(ims['T'].reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,))); hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
+    hdu = fits.PrimaryHDU(np.sqrt(ims['UC'])); hdu.writeto(os.path.join(config['OUT'], 'sqUC.fits'), overwrite=True)
+
     return ims['T'], OutPSF, ctrpos_offset, mlist, inmask
 
 
@@ -164,8 +168,6 @@ def main(argv):
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
     T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
-    # hdu = fits.PrimaryHDU(T.reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,)))
-    # hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations of point sources in input frame
@@ -198,7 +200,7 @@ def main(argv):
     for ipsf in range(n_in):
         posx = positions[0,:]-ctrpos[ipsf][0]/s_in
         posy = positions[1,:]-ctrpos[ipsf][1]/s_in
-        
+
         gal_image = galsim.ImageF(input_imsize, input_imsize, scale=s_in)
         print('making an ', ipsf,'-th input image...')
         for n in range(len(posx)):
