@@ -177,7 +177,8 @@ def main(argv):
     grid = [stamp_ctr + i*nx_in for i in range(steps)]
     x_mesh, y_mesh = np.meshgrid(grid, grid)
     positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
-    dx = nx_in/4.; dy = ny_in/4. # how much overlap of the stamp bounds do we want? 
+    dx = 48; dy = 48
+    # dx = nx_in/4.; dy = ny_in/4. # how much overlap of the stamp bounds do we want? 
 
     # (b) map these to (x,y) to world coordinates
     input_wcs = galsim.PixelScale(s_in)
@@ -195,8 +196,8 @@ def main(argv):
     image_list = []
     # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
-        posx = positions[0,:]+ctrpos[ipsf][0]
-        posy = positions[1,:]+ctrpos[ipsf][1]
+        posx = positions[0,:]+ctrpos[ipsf][0]/s_in
+        posy = positions[1,:]+ctrpos[ipsf][1]/s_in
         
         gal_image = galsim.ImageF(input_imsize, input_imsize, scale=s_in)
         print('making an ', ipsf,'-th input image...')
