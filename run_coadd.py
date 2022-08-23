@@ -11,6 +11,7 @@ from astropy import wcs
 import pyimcom_interface
 
 # other scripts in this directory
+import psf_utils
 import coadd_utils
 
 class EmptyClass:
@@ -89,7 +90,7 @@ for line in content:
   m = re.search('^INPSF\:\s*(\S+)\s+(\S+)', line)
   if m:
     inpsf = { 'path': m.group(1), 'format': m.group(2) }
-    inpsf['oversamp'] = coadd_utils.get_psf_oversamp(inpsf)
+    inpsf['oversamp'] = psf_utils.get_psf_oversamp(inpsf)
 
   # output stem
   m = re.search('^OUT\:\s*(\S+)', line)
@@ -200,7 +201,7 @@ infiles = []; infile_exists = []; infile_chars = []; inwcs = []
 for j in range(len(obslist)):
   infiles += [coadd_utils.get_sca_imagefile(inpath, obslist[j], obsdata, informat)]
   infile_exists += [exists(infiles[j])]
-  if coadd_utils.get_psf_pos(inpsf, obslist[j], obsdata, (0,0)) is None: infile_exists[j] = False
+  if psf_utils.get_psf_pos(inpsf, obslist[j], obsdata, (0,0)) is None: infile_exists[j] = False
   if infile_exists[j]:
     infile_chars += [' ']
     with fits.open(infiles[j]) as f: inwcs += [wcs.WCS(f[hdu_with_wcs].header)]
@@ -273,7 +274,7 @@ for ipostage in range(nrun):
         if pos[0]<0 or pos[0]>=coadd_utils.sca_nside or pos[1]<0 or pos[1]>=coadd_utils.sca_nside:
           useInput[j] = False
           continue
-        psfs[j] = coadd_utils.get_psf_pos(inpsf, obslist[j], obsdata, pos)
+        psfs[j] = psf_utils.get_psf_pos(inpsf, obslist[j], obsdata, pos)
         if psfs[j] is None:
           useInput[j] = False
           continue
