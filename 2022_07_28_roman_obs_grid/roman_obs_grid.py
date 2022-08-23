@@ -263,7 +263,7 @@ def main(argv):
         for n in range(len(xpos)):
             xy = galsim.PositionD(xpos[n], ypos[n])
             xyI = xy.round()
-            if gal_image.includes(xy):
+            if gal_image.bounds.includes(xy):
                 draw_offset = xy - xyI
                 b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
                                     ymin=xyI.y-int(ny_in/2)+1,
