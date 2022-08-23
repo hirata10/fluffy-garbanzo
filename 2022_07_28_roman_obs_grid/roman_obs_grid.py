@@ -249,8 +249,42 @@ def main(argv):
     # (d) feed those images to the image co-addition
     print('coadding images...')
     out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array_center.flatten()).reshape(n_out,ny_out,nx_out)
-    
     hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out.fits'), overwrite=True)
+    # ----- end of coaddition -----
+
+    # ----- start of making target array -----
+    target_out_array = np.zeros((n_out,ny_out,nx_out))
+    for ipsf in range(n_out):
+        # get position of source in stamp coordinates
+        xpos = out_srcpos_x / s_out + out_ctr
+        ypos = out_srcpos_y / s_out + out_ctr
+        
+        gal_image = galsim.ImageF(nx_out, ny_out, scale=s_out)
+        for n in range(len(xpos)):
+            xy = galsim.PositionD(xpos[n], ypos[n])
+            xyI = xy.round()
+            if gal_image.includes(xy):
+                draw_offset = xy - xyI
+                b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
+                                    ymin=xyI.y-int(ny_in/2)+1,
+                                    xmax=xyI.x+int(nx_in/2),
+                                    ymax=xyI.y+int(ny_in/2))
+                sub_gal_image = gal_image[b]
+                st_model = galsim.DeltaFunction(flux=1.)
+                final_gal = galsim.Convolve([ImOutPSF[ipsf], st_model])
+                final_gal.drawImage(sub_gal_image, offset=draw_offset)
+            else:
+                continue
+        target_out_array[ipsf,:,:] = gal_image.array
+        if save_image:
+            image_fname = os.path.join(config['OUT'], 'star_image_target_'+str(ipsf)+'.fits')
+            gal_image.write(image_fname)
+
+    err = out_array - target_out_array
+    if save_image:
+        image_fname = os.path.join(config['OUT'], 'error_target_'+str(ipsf)+'.fits')
+        err.write(image_fname)
+
     print('done')
     
 
