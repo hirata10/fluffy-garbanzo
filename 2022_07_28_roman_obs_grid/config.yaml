@@ -6,12 +6,12 @@ n_in:         6 # number of dithers
 n_out:        1 # number of output images
 nps:          8 # PSF oversampling factor
 s_in:         .11 # input pixel scale in arcsec
-s_out:        .035 # output pixel scale in arcsec
+s_out:        .025 # output pixel scale in arcsec
 n1:           512 # PSF postage stamp size
 rngseed:      3000 # random number generator seed
 
 # input and output postage stamp sizes
-insize: 128 128
+insize: 32 32
 outsize: 128 128
 lambda: 1.29 # wavelength [um]
 
