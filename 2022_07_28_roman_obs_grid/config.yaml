@@ -13,7 +13,7 @@ rngseed:      3000 # random number generator seed
 # input and output postage stamp sizes
 insize: 64 64
 outsize: 128 128
-steps: 2
+grid_step: 2
 lambda: 1.29 # wavelength [um]
 
 # Optional rolls (in degrees for each exposure) and camera distortions
