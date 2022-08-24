@@ -154,6 +154,10 @@ def main(argv):
     interpolated_psf = [roman_psf_gsobj for n in range(config['n_in'])]
     ImInPSF = [roman_psf_gsobj.image.array for n in range(config['n_in'])]
 
+    # Same transformation matrix as testdither.py
+    # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
+    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+
     # input and output image config
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
@@ -163,23 +167,20 @@ def main(argv):
     nps = config['nps']
     s_in = config['s_in']
     s_out = config['s_out']
+    steps = config['grid_step']
     save_image = sys.argv[1]
-
-    # Same transformation matrix as testdither.py
-    # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
-    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations of point sources in input frame
-    steps = 10 # number of stamps in a row
-    input_imsize = nx_in * steps # grid size
-    output_imsize = input_imsize * (s_in/s_out)
-    stamp_ctr = (nx_in-1)/2.
-    in_ctr = (input_imsize-1)/2. 
-    grid = [stamp_ctr + i*nx_in for i in range(steps)]
+    nx_in_stamp = nx_in // steps; ny_in_stamp = ny_in // steps
+    nx_out_stamp = nx_out // steps; ny_out_stamp = ny_out // steps
+
+    stamp_ctr = (nx_in_stamp-1)/2. + 1 # galsim ver.
+    in_ctr = (nx_in-1)/2. + 1 # galsim ver.
+    grid = [stamp_ctr + i*nx_in_stamp for i in range(steps)]
     x_mesh, y_mesh = np.meshgrid(grid, grid)
     positions = np.vstack([x_mesh.ravel(), y_mesh.ravel()])
-    dx = 48; dy = 48
+    # dx = 48; dy = 48
     # dx = nx_in/4.; dy = ny_in/4. # how much overlap of the stamp bounds do we want? 
 
     # (b) map these to (x,y) to world coordinates
@@ -187,102 +188,100 @@ def main(argv):
     world_pos = input_wcs.toWorld(positions[0,:], positions[1,:])
 
     # (c) map these back to the locations in output frame
-    out_ctr = (output_imsize-1)/2. 
+    out_ctr = (nx_out-1)/2. + 1 # galsim ver
     output_wcs = galsim.PixelScale(s_out)
     srcpos = output_wcs.toImage(world_pos[0], world_pos[1])
     out_srcpos_x = srcpos[0] - out_ctr
     out_srcpos_y = srcpos[1] - out_ctr
 
     # input image array
-    in_array = np.zeros((n_in, input_imsize, input_imsize))
+    in_array = np.zeros((n_in, ny_in, nx_in))
     image_list = []
     # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
         posx = positions[0,:]-ctrpos[ipsf][0]/s_in
         posy = positions[1,:]-ctrpos[ipsf][1]/s_in
 
-        gal_image = galsim.ImageF(input_imsize, input_imsize, scale=s_in)
+        gal_image = galsim.ImageF(nx_in, ny_in, scale=s_in)
         print('making an ', ipsf,'-th input image...')
         for n in range(len(posx)):
             xy = galsim.PositionD(posx[n], posy[n])
             xyI = xy.round()
             draw_offset = xy - xyI
-            b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
-                                ymin=xyI.y-int(ny_in/2)+1,
-                                xmax=xyI.x+int(nx_in/2),
-                                ymax=xyI.y+int(ny_in/2))
+            b = galsim.BoundsI( xmin=xyI.x-int(nx_in_stamp/2)+1,
+                                ymin=xyI.y-int(ny_in_stamp/2)+1,
+                                xmax=xyI.x+int(nx_in_stamp/2),
+                                ymax=xyI.y+int(ny_in_stamp/2))
             # Attempt to move the bounds towards center
-            qx = xyI.x-(in_ctr+1) # in_ctr is in numpy coordinates
-            qy = xyI.y-(in_ctr+1) # in_ctr is in numpy coordinates
-            if qx>0 and qy>0:
-                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
-            elif qx<0 and qy>0:
-                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
-            elif qx<0 and qy<0:
-                b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
-            elif qx>0 and qy<0:
-                b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
-            else:
-                print('somethings wrong when overlapping the stamp bounds.')
+            # qx = xyI.x-(in_ctr+1) # in_ctr is in numpy coordinates
+            # qy = xyI.y-(in_ctr+1) # in_ctr is in numpy coordinates
+            # if qx>0 and qy>0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
+            # elif qx<0 and qy>0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
+            # elif qx<0 and qy<0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
+            # elif qx>0 and qy<0:
+            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
+            # else:
+            #     print('somethings wrong when overlapping the stamp bounds.')
 
-            sub_gal_image = gal_image[b2]
+            sub_gal_image = gal_image[b]
             st_model = galsim.DeltaFunction(flux=1.)
             final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset, add_to_image=True)
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_grid_updated_'+str(ipsf)+'.fits')
+            image_fname = os.path.join(config['OUT'], 'star_image_grid_4x4_'+str(ipsf)+'.fits')
             gal_image.write(image_fname)
     
-    qy = (input_imsize-ny_in+1)//2
-    qx = (input_imsize-nx_in+1)//2
-    in_array_center = in_array[:,qy:-qy,qx:-qx]
-    print(in_array_center.shape)
-    if inmask is not None:
-        in_array_center = np.where(inmask, in_array_center, 0.)
+    # qy = (input_imsize-ny_in+1)//2
+    # qx = (input_imsize-nx_in+1)//2
+    # in_array_center = in_array[:,qy:-qy,qx:-qx]
+    # print(in_array_center.shape)
+    # if inmask is not None:
+    #     in_array_center = np.where(inmask, in_array_center, 0.)
 
-    if save_image:
-        image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
-        fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
+    # if save_image:
+    #     image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
+    #     fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
 
     # (d) feed those images to the image co-addition
     print('coadding images...')
-    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array_center.flatten()).reshape(n_out,ny_out,nx_out)
-    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out.fits'), overwrite=True)
+    out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array.flatten()).reshape(n_out,ny_out,nx_out)
+    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out_4x4.fits'), overwrite=True)
     # ----- end of coaddition -----
 
     # ----- start of making target array -----
     target_out_array = np.zeros((n_out,ny_out,nx_out))
     for ipsf in range(n_out):
         # get position of source in stamp coordinates
-        xpos = out_srcpos_x / s_out + out_ctr
-        ypos = out_srcpos_y / s_out + out_ctr
-        
-        gal_image = galsim.ImageF(nx_out, ny_out, scale=s_out)
+        xpos = srcpos[0] # out_srcpos_x / s_out + out_ctr
+        ypos = srcpos[1] # out_srcpos_y / s_out + out_ctr
+
+        target_image = galsim.ImageF(nx_out, ny_out, scale=s_out)
         for n in range(len(xpos)):
             xy = galsim.PositionD(xpos[n], ypos[n])
             xyI = xy.round()
-            if gal_image.bounds.includes(xy):
-                draw_offset = xy - xyI
-                b = galsim.BoundsI( xmin=xyI.x-int(nx_in/2)+1,
-                                    ymin=xyI.y-int(ny_in/2)+1,
-                                    xmax=xyI.x+int(nx_in/2),
-                                    ymax=xyI.y+int(ny_in/2))
-                sub_gal_image = gal_image[b]
-                st_model = galsim.DeltaFunction(flux=1.)
-                final_gal = galsim.Convolve([ImOutPSF[ipsf], st_model])
-                final_gal.drawImage(sub_gal_image, offset=draw_offset)
-            else:
-                continue
-        target_out_array[ipsf,:,:] = gal_image.array
+            draw_offset = xy - xyI
+            b = galsim.BoundsI( xmin=xyI.x-int(nx_out_stamp/2),
+                                ymin=xyI.y-int(ny_out_stamp/2),
+                                xmax=xyI.x+int(nx_out_stamp/2)-1,
+                                ymax=xyI.y+int(ny_out_stamp/2)-1)
+            sub_gal_image = target_image[b]
+            st_model = galsim.DeltaFunction(flux=1.)
+            final_gal = galsim.Convolve([ImOutPSF[ipsf], st_model])
+            final_gal.drawImage(sub_gal_image, offset=draw_offset)
+
+        target_out_array[ipsf,:,:] = target_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_target_'+str(ipsf)+'.fits')
-            gal_image.write(image_fname)
+            image_fname = os.path.join(config['OUT'], 'star_image_target_4x4_'+str(ipsf)+'.fits')
+            target_image.write(image_fname)
 
     err = out_array - target_out_array
     if save_image:
-        image_fname = os.path.join(config['OUT'], 'error_target_'+str(ipsf)+'.fits')
+        image_fname = os.path.join(config['OUT'], 'error_target_output.fits')
         err.write(image_fname)
 
     print('done')
