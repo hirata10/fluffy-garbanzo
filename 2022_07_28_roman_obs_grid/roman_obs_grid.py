@@ -233,7 +233,7 @@ def main(argv):
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_grid_4x4_'+str(ipsf)+'.fits')
+            image_fname = os.path.join(config['OUT'], 'star_image_grid_2x2_'+str(ipsf)+'.fits')
             gal_image.write(image_fname)
     
     # qy = (input_imsize-ny_in+1)//2
@@ -250,7 +250,7 @@ def main(argv):
     # (d) feed those images to the image co-addition
     print('coadding images...')
     out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array.flatten()).reshape(n_out,ny_out,nx_out)
-    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out_4x4.fits'), overwrite=True)
+    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out_2x2.fits'), overwrite=True)
     # ----- end of coaddition -----
 
     # ----- start of making target array -----
@@ -276,12 +276,12 @@ def main(argv):
 
         target_out_array[ipsf,:,:] = target_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_target_4x4_'+str(ipsf)+'.fits')
+            image_fname = os.path.join(config['OUT'], 'star_image_target_2x2_'+str(ipsf)+'.fits')
             target_image.write(image_fname)
 
     err = out_array - target_out_array
     if save_image:
-        image_fname = os.path.join(config['OUT'], 'error_target_output.fits')
+        image_fname = os.path.join(config['OUT'], 'error_target_output_2x2.fits')
         err.write(image_fname)
 
     print('done')
