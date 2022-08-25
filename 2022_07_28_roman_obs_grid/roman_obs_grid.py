@@ -121,6 +121,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
+        hdu = fits.PrimaryHDU(OutPSF[0]); hdu.writeto(os.path.join(config['OUT'], 'OutPSF.fits'), overwrite=True)
 
     # Compute PSF overlap (lookup tables)
     P = pyimcom_interface.PSF_Overlap(InPSF, OutPSF, .5, 2*n1-1, s_in, distort_matrices=mlist)
@@ -153,8 +154,9 @@ def main(argv):
     roman_psf = galsim.fits.read('/hpc/group/cosmology/masaya/imcom_phase1/input_1x1arcmin/psf/dc2_psf_100659.fits.gz', hdu=1)
     roman_psf_gsobj = galsim.InterpolatedImage(roman_psf, x_interpolant='lanczos50')
     # re-draw roman PSF with top-hat convolution
-    psf_image = galsim.ImageF(512, 512, scale=0.11)
-    roman_psf_gsobj.drawImage(psf_image, method='no_pixel')
+    psf_ = galsim.Convolve(roman_psf_gsobj, galsim.Pixel(0.11))
+    psf_image = galsim.ImageF(256, 256, scale=0.11/8.)
+    psf_.drawImage(psf_image, method='no_pixel')
     interpolated_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
     psfs = [interpolated_psf for n in range(config['n_in'])]
     ImInPSF = [psf_image.array for n in range(config['n_in'])]
@@ -162,7 +164,12 @@ def main(argv):
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
     T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
-
+    outpsf = []
+    for ipsf in range(config['n_out']):
+        outpsf_image = galsim.ImageF(config['n1'], config['n1'], scale=0.11/8.)
+        ImOutPSF[ipsf].drawImage(outpsf_image, method='no_pixel')
+        outpsf.append(galsim.InterpolatedImage(outpsf_image, x_interpolant='lanczos50'))
+    
     # input and output image config
     nx_in, ny_in = np.fromstring(config['insize'], dtype=int, sep=' ')
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
@@ -232,7 +239,6 @@ def main(argv):
     # ----- end of coaddition -----
 
     # ----- start of making target array -----
-    print(ImOutPSF)
     target_out_array = np.zeros((n_out,ny_out,nx_out))
     for ipsf in range(n_out):
         # get position of source in stamp coordinates
@@ -250,8 +256,7 @@ def main(argv):
                                 ymax=xyI.y+int(ny_out_stamp/2)-1)
             sub_gal_image = target_image[b]
             st_model = galsim.DeltaFunction(flux=1.)
-            outpsf = galsim.InterpolatedImage(ImOutPSF[ipsf], x_interpolant='lanczos50')
-            final_gal = galsim.Convolve([outpsf, st_model])
+            final_gal = galsim.Convolve([outpsf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
 
         target_out_array[ipsf,:,:] = target_image.array
