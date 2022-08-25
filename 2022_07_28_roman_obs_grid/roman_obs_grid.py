@@ -146,13 +146,18 @@ def main(argv):
     # INPUT
     with open(sys.argv[1], "r") as f:
         config = yaml.load(f, Loader=yaml.Loader)
+    save_image = sys.argv[1]
     
     # READ-IN Roman PSFs.
     # roman_psf = fio.FITS('/hpc/group/cosmology/masaya/imcom_phase1/input_1x1arcmin/psf/dc2_psf_100659.fits.gz')[1].read()
     roman_psf = galsim.fits.read('/hpc/group/cosmology/masaya/imcom_phase1/input_1x1arcmin/psf/dc2_psf_100659.fits.gz', hdu=1)
-    roman_psf_gsobj = galsim.InterpolatedImage(roman_psf, x_interpolant='lanczos3')
-    interpolated_psf = [roman_psf_gsobj for n in range(config['n_in'])]
-    ImInPSF = [roman_psf_gsobj.image.array for n in range(config['n_in'])]
+    roman_psf_gsobj = galsim.InterpolatedImage(roman_psf, x_interpolant='lanczos50')
+    # re-draw roman PSF with top-hat convolution
+    psf_image = galsim.ImageF(512, 512, scale=0.11)
+    roman_psf_gsobj.drawImage(psf_image, method='no_pixel')
+    interpolated_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
+    psfs = [interpolated_psf for n in range(config['n_in'])]
+    ImInPSF = [psf_image.array for n in range(config['n_in'])]
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
@@ -168,7 +173,6 @@ def main(argv):
     s_in = config['s_in']
     s_out = config['s_out']
     steps = config['grid_step']
-    save_image = sys.argv[1]
 
     # Similar steps to test_psf_inject() but with a grid. 
     # (a) make a list of locations of point sources in input frame
@@ -191,8 +195,6 @@ def main(argv):
     out_ctr = (nx_out-1)/2. + 1 # galsim ver
     output_wcs = galsim.PixelScale(s_out)
     srcpos = output_wcs.toImage(world_pos[0], world_pos[1])
-    out_srcpos_x = srcpos[0] - out_ctr
-    out_srcpos_y = srcpos[1] - out_ctr
 
     # input image array
     in_array = np.zeros((n_in, ny_in, nx_in))
@@ -212,48 +214,25 @@ def main(argv):
                                 ymin=xyI.y-int(ny_in_stamp/2)+1,
                                 xmax=xyI.x+int(nx_in_stamp/2),
                                 ymax=xyI.y+int(ny_in_stamp/2))
-            # Attempt to move the bounds towards center
-            # qx = xyI.x-(in_ctr+1) # in_ctr is in numpy coordinates
-            # qy = xyI.y-(in_ctr+1) # in_ctr is in numpy coordinates
-            # if qx>0 and qy>0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin-dy, xmax=b.xmax-dx, ymax=b.ymax-dy)
-            # elif qx<0 and qy>0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin-dy, xmax=b.xmax+dx, ymax=b.ymax-dy)
-            # elif qx<0 and qy<0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin+dx, ymin=b.ymin+dy, xmax=b.xmax+dx, ymax=b.ymax+dy)
-            # elif qx>0 and qy<0:
-            #     b2 = galsim.BoundsI(xmin=b.xmin-dx, ymin=b.ymin+dy, xmax=b.xmax-dx, ymax=b.ymax+dy)
-            # else:
-            #     print('somethings wrong when overlapping the stamp bounds.')
 
             sub_gal_image = gal_image[b]
             st_model = galsim.DeltaFunction(flux=1.)
-            final_gal = galsim.Convolve([interpolated_psf[ipsf], st_model])
+            final_gal = galsim.Convolve([psfs[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset, add_to_image=True)
             image_list.append(gal_image)
         in_array[ipsf,:,:] = gal_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_grid_2x2_'+str(ipsf)+'.fits')
+            image_fname = os.path.join(config['OUT'], 'star_image_grid_'+str(ipsf)+'.fits')
             gal_image.write(image_fname)
-    
-    # qy = (input_imsize-ny_in+1)//2
-    # qx = (input_imsize-nx_in+1)//2
-    # in_array_center = in_array[:,qy:-qy,qx:-qx]
-    # print(in_array_center.shape)
-    # if inmask is not None:
-    #     in_array_center = np.where(inmask, in_array_center, 0.)
-
-    # if save_image:
-    #     image_fname = os.path.join(config['OUT'], 'star_image_grid_center.fits')
-    #     fio.write(image_fname, in_array[:,qy:-qy,qx:-qx])
 
     # (d) feed those images to the image co-addition
     print('coadding images...')
     out_array = (T.reshape(n_out*ny_out*nx_out,n_in*ny_in*nx_in)@in_array.flatten()).reshape(n_out,ny_out,nx_out)
-    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_ptsrc_out_2x2.fits'), overwrite=True)
+    hdu = fits.PrimaryHDU(out_array); hdu.writeto(os.path.join(config['OUT'], 'grid_src_out.fits'), overwrite=True)
     # ----- end of coaddition -----
 
     # ----- start of making target array -----
+    print(ImOutPSF)
     target_out_array = np.zeros((n_out,ny_out,nx_out))
     for ipsf in range(n_out):
         # get position of source in stamp coordinates
@@ -271,17 +250,18 @@ def main(argv):
                                 ymax=xyI.y+int(ny_out_stamp/2)-1)
             sub_gal_image = target_image[b]
             st_model = galsim.DeltaFunction(flux=1.)
-            final_gal = galsim.Convolve([ImOutPSF[ipsf], st_model])
+            outpsf = galsim.InterpolatedImage(ImOutPSF[ipsf], x_interpolant='lanczos50')
+            final_gal = galsim.Convolve([outpsf, st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
 
         target_out_array[ipsf,:,:] = target_image.array
         if save_image:
-            image_fname = os.path.join(config['OUT'], 'star_image_target_2x2_'+str(ipsf)+'.fits')
+            image_fname = os.path.join(config['OUT'], 'star_image_target_'+str(ipsf)+'.fits')
             target_image.write(image_fname)
 
     err = out_array - target_out_array
     if save_image:
-        image_fname = os.path.join(config['OUT'], 'error_target_output_2x2.fits')
+        image_fname = os.path.join(config['OUT'], 'error_target_output.fits')
         err.write(image_fname)
 
     print('done')
