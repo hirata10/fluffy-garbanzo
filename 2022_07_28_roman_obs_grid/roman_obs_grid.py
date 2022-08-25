@@ -99,6 +99,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     flat_penalty = float(config['flat_penalty'])
     cd = .3 # charge diffusion, rms per axis in pixels
     sigout       = np.sqrt(1./12.+cd**2)
+    sigout = np.sqrt(sigout**2+float(config['extrasmooth'])**2)
 
     # ROLL, SHEAR, MAGNIFY
     roll = np.fromstring(config['roll'], dtype=int, sep=' ')
@@ -266,7 +267,7 @@ def main(argv):
     err = out_array - target_out_array
     if save_image:
         image_fname = os.path.join(config['OUT'], 'error_target_output.fits')
-        err.write(image_fname)
+        fio.write(image_fname, err)
 
     print('done')
     
