@@ -166,8 +166,7 @@ def main(argv):
     T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
     outpsf = []
     for ipsf in range(config['n_out']):
-        outpsf_image = galsim.ImageF(config['n1'], config['n1'], scale=0.11/8.)
-        ImOutPSF[ipsf].drawImage(outpsf_image, method='no_pixel')
+        outpsf_image = galsim.Image(ImOutPSF[ipsf], scale=0.11/8.)
         outpsf.append(galsim.InterpolatedImage(outpsf_image, x_interpolant='lanczos50'))
     
     # input and output image config
