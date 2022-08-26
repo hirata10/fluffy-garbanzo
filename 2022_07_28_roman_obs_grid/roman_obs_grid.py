@@ -244,20 +244,20 @@ def main(argv):
     target_out_array = np.zeros((n_out,ny_out,nx_out))
     for ipsf in range(n_out):
         # get position of source in stamp coordinates
-        xpos = srcpos[0] # out_srcpos_x / s_out + out_ctr
-        ypos = srcpos[1] # out_srcpos_y / s_out + out_ctr
+        xpos = srcpos[0] - 0.5 # out_srcpos_x / s_out + out_ctr
+        ypos = srcpos[1] - 0.5 # out_srcpos_y / s_out + out_ctr
 
         target_image = galsim.ImageF(nx_out, ny_out, scale=s_out)
         for n in range(len(xpos)):
-            xy = galsim.PositionD(xpos[n], ypos[n])
+            xy = galsim.PositionD(np.float32(xpos[n]), np.float32(ypos[n]))
             xyI = xy.round()
             draw_offset = xy - xyI
-            b = galsim.BoundsI( xmin=xyI.x-int(nx_out_stamp/2),
-                                ymin=xyI.y-int(ny_out_stamp/2),
-                                xmax=xyI.x+int(nx_out_stamp/2)-1,
-                                ymax=xyI.y+int(ny_out_stamp/2)-1)
+            b = galsim.BoundsI( xmin=xyI.x-int(nx_out_stamp/2)+1,
+                                ymin=xyI.y-int(ny_out_stamp/2)+1,
+                                xmax=xyI.x+int(nx_out_stamp/2),
+                                ymax=xyI.y+int(ny_out_stamp/2))
             sub_gal_image = target_image[b]
-            st_model = galsim.DeltaFunction(flux=1.)
+            st_model = galsim.DeltaFunction(flux=1.*(s_in/s_out)**2) 
             final_gal = galsim.Convolve([outpsf[ipsf], st_model])
             final_gal.drawImage(sub_gal_image, offset=draw_offset)
 
