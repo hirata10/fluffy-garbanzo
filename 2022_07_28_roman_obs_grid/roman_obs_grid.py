@@ -164,7 +164,9 @@ def main(argv):
 
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
+    t0 = time.time()
     T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+    print('time it took to compute T is ', time.time()-t0)
     outpsf = []
     for ipsf in range(config['n_out']):
         outpsf_image = galsim.Image(ImOutPSF[ipsf], scale=0.11/8.)
