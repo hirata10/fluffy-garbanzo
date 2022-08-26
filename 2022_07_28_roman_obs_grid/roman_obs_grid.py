@@ -137,7 +137,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     # Compute coadd matrix. 
     ims = pyimcom_interface.get_coadd_matrix(P, float(nps), [uctarget**2], ctrpos_offset, mlist, s_in, (ny_in,nx_in), s_out, (ny_out,nx_out), inmask, extbdy, smax=1./n_in, flat_penalty=flat_penalty)
 
-    hdu = fits.PrimaryHDU(ims['T'].reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,))); hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
+    # hdu = fits.PrimaryHDU(ims['T'].reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,))); hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
     hdu = fits.PrimaryHDU(np.sqrt(ims['UC'])); hdu.writeto(os.path.join(config['OUT'], 'sqUC.fits'), overwrite=True)
 
     return ims['T'], OutPSF, ctrpos_offset, mlist, inmask
