@@ -6,13 +6,13 @@ n_in:         6 # number of dithers
 n_out:        1 # number of output images
 nps:          8 # PSF oversampling factor
 s_in:         .11 # input pixel scale in arcsec
-s_out:        .055 # output pixel scale in arcsec
+s_out:        .0275 # output pixel scale in arcsec
 n1:           256 # PSF postage stamp size
 rngseed:      3000 # random number generator seed
 
 # input and output postage stamp sizes
 insize: 64 64
-outsize: 128 128
+outsize: 256 256
 grid_step: 2
 lambda: 1.29 # wavelength [um]
 
@@ -37,4 +37,4 @@ uctarget:     1e-3
 flat_penalty: 1e-8 
 
 # output file prefix
-OUT: /hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/out/grid_2x2_tophat
+OUT: /hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/out/grid_2x2_4xoversample
