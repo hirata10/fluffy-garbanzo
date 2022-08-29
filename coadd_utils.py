@@ -5,7 +5,14 @@ import re
 import fitsio
 from fitsio import FITS,FITSHDR
 from astropy.io import fits
+from astropy import wcs
 from os.path import exists
+
+# may need to be able to read a PSF
+import psf_utils
+
+# interface to injecting GalSim objects
+import inject_galsim_obj
 
 ### This file contains assorted utilities and Roman WFI data needed for the coadd code. ###
 
@@ -114,10 +121,12 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
 #   obsdata = observation data table (information needed for some formats)
 #   path = directory for the files
 #   format = string describing type of file name
+#   inwcs = input WCS list (same length as obslist)
+#   inpsf = input PSF information (dictionary; to be passed to psfutils routines if we draw objects)
 #   extrainput = make multiple maps (list of types, first should be None, rest strings)
 #   extraargs = for future compatibility
 #
-def get_all_data(n_inframe, obslist, obsdata, path, format, extrainput, extraargs=None):
+def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrainput, extraargs=None):
 
   # start by allocating the memory ...
   hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
@@ -147,6 +156,11 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, extrainput, extraarg
           rng = numpy.random.default_rng(seed)
           hypercube[i,j,:,:] = rng.normal(loc=0., scale=1., size=(sca_nside,sca_nside))
           del rng
+        # galsim star grid
+        m = re.search(r'^gsstar(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+          res = int(m.group(1))
+          hypercube[i,j,:,:] = inject_galsim_obj.galsim_star_grid(res, inwcs[j], inpsf, obslist[j], obsdata, sca_nside)
 
   return hypercube
 

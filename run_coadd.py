@@ -19,6 +19,7 @@ class EmptyClass:
 outcoords = EmptyClass() # will fill this in later
 
 # some default settings
+stoptile = None # don't stop until we get to the end
 sigmatarget = 1.5/2.355 # FWHM Gaussian smoothing divided by 2.355 to be a sigma
 npixpsf = 64 # size of PSF postage stamp in native pixels
 instamp_pad = 1.055*coadd_utils.arcsec # input stamp size padding
@@ -67,9 +68,9 @@ for line in content:
   m = re.search('^PAD\:\s*(\S+)', line)
   if m: outcoords.postage_pad = int(m.group(1))
 
-  # number of output PSFs
-  m = re.search('^NOUT\:\s*(\S+)', line)
-  if m: n_out = int(m.group(1))
+  # output target PSF extra smearing
+  m = re.search('^EXTRASMOOTH\:\s*(\S+)', line)
+  if m: sigmatarget = float(m.group(1))
 
   # which filter to make coadd
   m = re.search('^FILTER\:\s*(\S+)', line)
@@ -103,6 +104,10 @@ for line in content:
   # CR mask rate
   m = re.search('^CMASK\:\s*(\S+)', line)
   if m: cr_mask_rate = float(m.group(1))
+
+  # stop bulding the tile after a certain number of postage stamps
+  m = re.search('^STOP\:\s*(\d+)', line)
+  if m: stoptile = int(m.group(1))
 
 # --- end configuration file ---
 
@@ -222,7 +227,7 @@ if len(obslist)==0:
   print('No candidate observations found to stack. Exiting now.')
   exit()
 sys.stdout.write('Reading input data ... ')
-in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, extrainput)
+in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, inwcs, inpsf, extrainput)
 sys.stdout.write('done.\n')
 sys.stdout.flush()
 print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
@@ -246,7 +251,7 @@ else:
 ### Begin loop over all the postage stamps we want to create ###
 
 nrun = outcoords.n1P**2
-# nrun = 104 # <-- for testing only, to do the first patches
+if stoptile is not None: nrun=stoptile
 for ipostage in range(nrun):
   ipostageX = 2 * ((ipostage//4)% (outcoords.n1P//2) )
   ipostageY = 2 * ((ipostage//4)//(outcoords.n1P//2) )
@@ -409,6 +414,8 @@ fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
 fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
 hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])
 hdu_list.writeto(outstem+'_map.fits', overwrite=True)
+
+os.system('cp ' + config_file + ' ' + outstem + '_config.txt')
 
 print('')
 print('finished at t =', time.perf_counter(), 's')
