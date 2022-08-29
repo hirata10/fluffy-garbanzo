@@ -37,4 +37,4 @@ uctarget:     1e-3
 flat_penalty: 1e-8 
 
 # output file prefix
-OUT: /hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/out/grid_2x2_target_array
+OUT: /hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/2022_07_28_roman_obs_grid/out/grid_2x2_subpixel
