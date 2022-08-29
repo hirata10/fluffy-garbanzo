@@ -65,7 +65,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
-        hdu = fits.PrimaryHDU(OutPSF[0]); hdu.writeto(os.path.join(config['OUT'], 'OutPSF.fits'), overwrite=True)
+        # hdu = fits.PrimaryHDU(OutPSF[0]); hdu.writeto(os.path.join(config['OUT'], 'OutPSF.fits'), overwrite=True)
 
     # Compute PSF overlap (lookup tables)
     P = pyimcom_interface.PSF_Overlap(InPSF, OutPSF, .5, 2*n1-1, s_in, distort_matrices=mlist)
