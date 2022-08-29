@@ -95,7 +95,7 @@ def get_roman_psfs(n_in, roll_angles, sca):
     epsf = galsim.Convolve(optical_psf, galsim.Pixel(0.11))
     psf_image = galsim.ImageF(256, 256, scale=0.11/8.)
     epsf.drawImage(psf_image, method='no_pixel')
-    ImInPSF = [epsf.array for n in range(n_in)]
+    ImInPSF = [psf_image.array for n in range(n_in)]
 
     InputPSF = []
     for n in range(n_in):
