@@ -256,10 +256,10 @@ def main(argv):
                                 ymin=xyI.y-int(ny_out_stamp/2)+1,
                                 xmax=xyI.x+int(nx_out_stamp/2),
                                 ymax=xyI.y+int(ny_out_stamp/2))
-            sub_gal_image = target_image[b]
+            sub_target_image = target_image[b]
             st_model = galsim.DeltaFunction(flux=1.*(s_in/s_out)**2) 
-            final_gal = galsim.Convolve([outpsf[ipsf], st_model])
-            final_gal.drawImage(sub_gal_image, offset=draw_offset)
+            final_target = galsim.Convolve([outpsf[ipsf], st_model])
+            final_target.drawImage(sub_target_image, add_to_image=True)
 
         target_out_array[ipsf,:,:] = target_image.array
         if save_image:
