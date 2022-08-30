@@ -14,6 +14,9 @@ import pyimcom_interface
 import psf_utils
 import coadd_utils
 
+# set timer
+tstart = time.perf_counter()
+
 class EmptyClass:
   pass
 outcoords = EmptyClass() # will fill this in later
@@ -260,7 +263,7 @@ for ipostage in range(nrun):
   ipostageY = 2 * ((ipostage//4)//(outcoords.n1P//2) )
   if ipostage%2==1: ipostageX += 1
   if ipostage%4>=2: ipostageY += 1
-  print('postage stamp {:2d},{:2d}  {:6.3f}% t= {:9.2f} s'.format(ipostageX, ipostageY, 100*ipostage/outcoords.n1P**2, time.perf_counter()))
+  print('postage stamp {:2d},{:2d}  {:6.3f}% t= {:9.2f} s'.format(ipostageX, ipostageY, 100*ipostage/outcoords.n1P**2, time.perf_counter()-tstart))
 
   # if ipostageX>=12: continue # <-- also for testing, just to do the first few columns
 
@@ -421,5 +424,5 @@ hdu_list.writeto(outstem+'_map.fits', overwrite=True)
 os.system('cp ' + config_file + ' ' + outstem + '_config.txt')
 
 print('')
-print('finished at t =', time.perf_counter(), 's')
+print('finished at t =', time.perf_counter()-tstart, 's')
 print('')
