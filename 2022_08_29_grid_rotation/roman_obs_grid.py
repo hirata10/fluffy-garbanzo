@@ -171,9 +171,11 @@ def main(argv):
     image_list = []
     # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
+        xpsf = positions[0,:]-ctrpos[ipsf][0]
+        ypsf = positions[1,:]-ctrpos[ipsf][1]
         M = np.linalg.inv(s_in*mlist[ipsf])
-        posx = positions[0,:]-ctrpos[ipsf][0]/s_in # how does the distortion matrices come in with this setting. I suppose rotation would not do anything?
-        posy = positions[1,:]-ctrpos[ipsf][1]/s_in
+        posx = M[0,0]*xpsf + M[0,1]*ypsf # how does the distortion matrices come in with this setting. I suppose rotation would not do anything?
+        posy = M[1,0]*xpsf + M[1,1]*ypsf
 
         gal_image = galsim.ImageF(nx_in, ny_in, scale=s_in)
         print('making an ', ipsf,'-th input image...')
