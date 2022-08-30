@@ -62,6 +62,8 @@ def _compute_T(config, InPSF, outpsf='simple'):
         f[1] = rng.random()
         Mf = s_in*mlist[k]@f
         ctrpos_offset += [(Mf[0],Mf[1])]
+    np.save('ctrpos.npy', ctrpos_offset)
+    np.save('mlist.npy', mlist)
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
@@ -82,8 +84,6 @@ def _compute_T(config, InPSF, outpsf='simple'):
 
     # hdu = fits.PrimaryHDU(ims['T'].reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,))); hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
     hdu = fits.PrimaryHDU(np.sqrt(ims['UC'])); hdu.writeto(os.path.join(config['OUT'], 'sqUC.fits'), overwrite=True)
-    np.save('ctrpos.npy', ctrpos_offset)
-    np.save('mlist.npy', mlist)
 
     return ims['T'], OutPSF, ctrpos_offset, mlist, inmask
 
