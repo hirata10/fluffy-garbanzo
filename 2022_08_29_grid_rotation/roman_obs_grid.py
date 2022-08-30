@@ -53,6 +53,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
 
     mlist = []
+    mlist2 = []
     posoffset = []
     ctrpos_offset = [] # The center of the postage stamp in image coordinates of the output image (which is centered at (0,0)), meaning that this is the dither offset relative to the center of the image.
     for k in range(n_in):
