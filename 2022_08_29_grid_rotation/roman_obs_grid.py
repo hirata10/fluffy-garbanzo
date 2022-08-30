@@ -53,17 +53,22 @@ def _compute_T(config, InPSF, outpsf='simple'):
     nx_out, ny_out = np.fromstring(config['outsize'], dtype=int, sep=' ')
 
     mlist = []
+    posoffset = []
     ctrpos_offset = [] # The center of the postage stamp in image coordinates of the output image (which is centered at (0,0)), meaning that this is the dither offset relative to the center of the image.
     for k in range(n_in):
         mlist += [pyimcom_interface.rotmatrix(roll[k])@pyimcom_interface.shearmatrix(shear[2*k],shear[2*k+1])/(1.+magnify[k])]
+        mlist2 += [pyimcom_interface.rotmatrix(0)@pyimcom_interface.shearmatrix(shear[2*k],shear[2*k+1])/(1.+magnify[k])]
 
         f = np.zeros((2,))
         f[0] = rng.random()
         f[1] = rng.random()
         Mf = s_in*mlist[k]@f
         ctrpos_offset += [(Mf[0],Mf[1])]
+        Mg = s_in*mlist2[k]@f
+        posoffset += [(Mg[0], Mg[1])]
     np.save('ctrpos.npy', ctrpos_offset)
     np.save('mlist.npy', mlist)
+    np.save('posoffset.npy', posoffset)
 
     if outpsf == 'simple':
         OutPSF = [ pyimcom_interface.psf_simple_airy(n1,nps*ld,tophat_conv=0.,sigma=nps*sigout) ]
@@ -85,7 +90,7 @@ def _compute_T(config, InPSF, outpsf='simple'):
     # hdu = fits.PrimaryHDU(ims['T'].reshape((n_out,ny_out*nx_out, n_in*ny_in*nx_in,))); hdu.writeto(os.path.join(config['OUT'], 'T.fits'), overwrite=True)
     hdu = fits.PrimaryHDU(np.sqrt(ims['UC'])); hdu.writeto(os.path.join(config['OUT'], 'sqUC.fits'), overwrite=True)
 
-    return ims['T'], OutPSF, ctrpos_offset, mlist, inmask
+    return ims['T'], OutPSF, ctrpos_offset, mlist, posoffset
 
 def get_roman_psfs(n_in, roll_angles, sca):
     # from astropy.time import Time
@@ -99,20 +104,22 @@ def get_roman_psfs(n_in, roll_angles, sca):
     epsf.drawImage(psf_image, method='no_pixel')
     ImInPSF = [psf_image.array for n in range(n_in)]
 
-    InputPSF = []
-    for n in range(n_in):
-        # d=fio.FITS('observing_sequence_hlsonly_5yr.fits')[-1][100659]
-        # date   = Time(d['date'],format='mjd').datetime
-        ra = galsim.Angle.from_hms('16:01:41.01257')
-        dec = galsim.Angle.from_dms('66:48:10.1312')
-        wcs = roman.getWCS(world_pos  = galsim.CelestialCoord(ra=ra, dec=dec), 
-                           PA          = roll_angles[n]*galsim.radians, 
-                           # date        = date,
-                           SCAs        = sca,
-                           PA_is_FPA   = True)[sca]
-        optical_rotated_psf = roman.getPSF(sca, 'J129', wavelength=bpass, n_waves=10, wcs=wcs, pupil_bin=8)
-        effective_rotated_psf = galsim.Convolve(optical_rotated_psf, galsim.Pixel(0.11))
-        InputPSF.append(effective_rotated_psf)
+    # InputPSF = []
+    interpolated_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
+    InputPSF = [interpolated_psf for n in range(n_in)]
+    # for n in range(n_in):
+    #     # d=fio.FITS('observing_sequence_hlsonly_5yr.fits')[-1][100659]
+    #     # date   = Time(d['date'],format='mjd').datetime
+    #     ra = galsim.Angle.from_hms('16:01:41.01257')
+    #     dec = galsim.Angle.from_dms('66:48:10.1312')
+    #     wcs = roman.getWCS(world_pos  = galsim.CelestialCoord(ra=ra, dec=dec), 
+    #                        PA          = roll_angles[n]*galsim.radians, 
+    #                        # date        = date,
+    #                        SCAs        = sca,
+    #                        PA_is_FPA   = True)[sca]
+    #     optical_rotated_psf = roman.getPSF(sca, 'J129', wavelength=bpass, n_waves=10, wcs=wcs, pupil_bin=8)
+    #     effective_rotated_psf = galsim.Convolve(optical_rotated_psf, galsim.Pixel(0.11))
+    #     InputPSF.append(effective_rotated_psf)
 
     return ImInPSF, InputPSF
 
@@ -130,7 +137,7 @@ def main(argv):
     # Same transformation matrix as testdither.py
     # posoffset[k] is the position of the centroid of the k-th input stamp in the coadd coordinates in absolute (arcsec) units.
     t0 = time.time()
-    T, ImOutPSF, ctrpos, mlist, inmask = _compute_T(config, ImInPSF, outpsf='simple')
+    T, ImOutPSF, ctrpos, mlist, posoffset = _compute_T(config, ImInPSF, outpsf='simple')
     print('time it took to compute T is ', time.time()-t0)
     outpsf = []
     for ipsf in range(config['n_out']):
@@ -173,11 +180,8 @@ def main(argv):
     image_list = []
     # (d) make images using the locations in the input frame + distortion matrix + position offset
     for ipsf in range(n_in):
-        xpsf = positions[0,:]-ctrpos[ipsf][0]
-        ypsf = positions[1,:]-ctrpos[ipsf][1]
-        M = np.linalg.inv(s_in*mlist[ipsf])
-        posx = M[0,0]*xpsf + M[0,1]*ypsf # how does the distortion matrices come in with this setting. I suppose rotation would not do anything?
-        posy = M[1,0]*xpsf + M[1,1]*ypsf
+        posx = positions[0,:]-posoffset[ipsf][0]/s_in
+        posy = positions[1,:]-posoffset[ipsf][1]/s_in
 
         gal_image = galsim.ImageF(nx_in, ny_in, scale=s_in)
         print('making an ', ipsf,'-th input image...')
