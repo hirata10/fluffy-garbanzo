@@ -72,6 +72,9 @@ for line in content:
   m = re.search('^EXTRASMOOTH\:\s*(\S+)', line)
   if m: sigmatarget = float(m.group(1))
 
+  m = re.search('^INPAD\:\s*(\S+)', line)
+  if m: instamp_pad = float(m.group(1))*coadd_utils.arcsec
+
   # which filter to make coadd
   m = re.search('^FILTER\:\s*(\S+)', line)
   if m: use_filter = int(m.group(1))
