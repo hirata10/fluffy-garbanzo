@@ -49,12 +49,12 @@ def get_psf_pos(inpsf, idsca, obsdata, pos, extraargs=None):
 
     # fitsio version
     fileh = fitsio.FITS(fname)
-    this_psf = smooth_and_pad(fileh[idsca[1]+1][:,:], tophatwidth=inpsf['oversamp'])
+    this_psf = smooth_and_pad(fileh[idsca[1]][:,:], tophatwidth=inpsf['oversamp'])
     fileh.close()
 
     # old astropy.io fits input
     #f = fits.open(fname)
-    #this_psf = smooth_and_pad(f[idsca[1]+1].data, tophatwidth=inpsf['oversamp'])
+    #this_psf = smooth_and_pad(f[idsca[1]].data, tophatwidth=inpsf['oversamp'])
     #f.close()
 
   return this_psf
