@@ -140,6 +140,8 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
     if exists(filename):
       if format=='dc2_imsim':
         with fits.open(filename) as f: hypercube[0,j,:,:] = f['SCI'].data - float(f['SCI'].header['SKY_MEAN'])
+    else:
+      continue
     #
     # now for the extra inputs
     if n_inframe>1:
