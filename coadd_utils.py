@@ -13,6 +13,8 @@ import psf_utils
 
 # interface to injecting GalSim objects
 import inject_galsim_obj
+# and more general noise fields
+import inject_complex_noise
 
 ### This file contains assorted utilities and Roman WFI data needed for the coadd code. ###
 
@@ -147,7 +149,7 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
           filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs = {'type':'truth'})
           if exists(filename):
             with fits.open(filename) as f: hypercube[i,j,:,:] = f['SCI'].data
-        # pure noise frames (generated from RNG, not file)
+        # white noise frames (generated from RNG, not file)
         m = re.search(r'^whitenoise(\d+)$', extrainput[i], re.IGNORECASE)
         if m:
           q = int(m.group(1))
@@ -156,6 +158,13 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
           rng = numpy.random.default_rng(seed)
           hypercube[i,j,:,:] = rng.normal(loc=0., scale=1., size=(sca_nside,sca_nside))
           del rng
+        # 1/f noise frames (generated from RNG, not file)
+        m = re.search(r'^1fnoise(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+          q = int(m.group(1))
+          seed = 1000000*(18*q+obslist[j][1]) + obslist[j][0]
+          print('noise rng: frame_q={:d}, seed={:d}'.format(q,seed), '--> 1/f')
+          hypercube[i,j,:,:] = inject_complex_noise.noise_1f_frame(seed)
         # galsim star grid
         m = re.search(r'^gsstar(\d+)$', extrainput[i], re.IGNORECASE)
         if m:
@@ -182,8 +191,8 @@ def genWindow(x,y,insize,wcsin,wcsout):
   yc = (ymin+ymax-1)/2.
 
   # location in output system
-  p = wcsin.wcs_pix2world(numpy.array([[xc,yc]]) ,0)[0]
-  wcspos = wcsout.wcs_world2pix(numpy.array([p]),0)[0]
+  p = wcsin.all_pix2world(numpy.array([[xc,yc]]) ,0)[0]
+  wcspos = wcsout.all_world2pix(numpy.array([p]),0)[0]
 
   # get active pixels
   activepix = numpy.ones((insize,insize), dtype=bool)
@@ -232,13 +241,14 @@ def randmask(idsca, pcut, hitinfo=None):
 ### Fade Kernel methods ###
 
 # array with a trapezoid filter of width n+2*fade_kernel on each side
-def trapezoid(n,fade_kernel):
+def trapezoid(n,fade_kernel,use_trunc_sinc=True):
   ar = numpy.ones((n+2*fade_kernel,n+2*fade_kernel))
   if n<=2*fade_kernel:
     print('Fatal error in coadd_utils.trapezoid: insufficient patch size, n=', n, 'fade_kernel=', fade_kernel)
     exit()
   for i in range(2*fade_kernel):
     s = (i+1)/(2*fade_kernel+1)
+    if use_trunc_sinc: s = s-numpy.sin(2*numpy.pi*s)/(2*numpy.pi)
     ar[   i,   :] *= s
     ar[-1-i,   :] *= s
     ar[   :,   i] *= s

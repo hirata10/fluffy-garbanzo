@@ -179,8 +179,8 @@ wcsout.wcs.crval = [outcoords.ra, outcoords.dec]
 #   0   1
 cornerx = [-.5,outcoords.NsideP-.5,-.5,outcoords.NsideP-.5,(outcoords.NsideP-1)/2.]
 cornery = [-.5,-.5,outcoords.NsideP-.5,outcoords.NsideP-.5,(outcoords.NsideP-1)/2.]
-for i in range(5): print(i, wcsout.wcs_pix2world(numpy.array([[cornerx[i],cornery[i]]]), 0))
-outcoords.centerpos = wcsout.wcs_pix2world(numpy.array([[cornerx[-1],cornery[-1]]]), 0)[0] # [ra,dec] array in degrees
+for i in range(5): print(i, wcsout.all_pix2world(numpy.array([[cornerx[i],cornery[i]]]), 0))
+outcoords.centerpos = wcsout.all_pix2world(numpy.array([[cornerx[-1],cornery[-1]]]), 0)[0] # [ra,dec] array in degrees
 
 # make basic output array
 out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.float32)
@@ -224,7 +224,7 @@ print('  OBSID SCA  RAWFI    DECWFI   PA     RASCA   DECSCA       FILE (x=missin
 for j in range(len(obslist)):
   cpos = '                 '
   if infile_exists[j]:
-    cpos_coord = inwcs[j].wcs_pix2world([[coadd_utils.sca_ctrpix,coadd_utils.sca_ctrpix]], 0)[0]
+    cpos_coord = inwcs[j].all_pix2world([[coadd_utils.sca_ctrpix,coadd_utils.sca_ctrpix]], 0)[0]
     cpos = '{:8.4f} {:8.4f}'.format(cpos_coord[0], cpos_coord[1])
   print('{:7d} {:2d} {:8.4f} {:8.4f} {:6.2f} {:s} {:s} {:s}'.format(obslist[j][0], obslist[j][1], obsdata['ra'][obslist[j][0]], obsdata['dec'][obslist[j][0]],
     obsdata['pa'][obslist[j][0]], cpos, infile_chars[j], infiles[j]))
@@ -271,7 +271,7 @@ for ipostage in range(nrun):
   # (to save time, only done every 4th IMCOM run)
   if ipostage%4==0:
     # get where to compute the PSF and the camera distortion matrix
-    psf_compute_point = wcsout.wcs_pix2world(numpy.array([[(ipostageX+1)*outcoords.n2-.5,(ipostageY+1)*outcoords.n2-.5]]) ,0)[0]
+    psf_compute_point = wcsout.all_pix2world(numpy.array([[(ipostageX+1)*outcoords.n2-.5,(ipostageY+1)*outcoords.n2-.5]]) ,0)[0]
     dWdp_out = wcs.utils.local_partial_pixel_derivatives(wcsout,(ipostageX+1)*outcoords.n2-.5,(ipostageY+1)*outcoords.n2-.5)
     print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(psf_compute_point[0], psf_compute_point[1]))
     useInput = infile_exists.copy()
@@ -279,7 +279,7 @@ for ipostage in range(nrun):
     pixloc = [None for l in range(len(obslist))]
     for j in range(len(obslist)):
       if infile_exists[j]:
-        pos = inwcs[j].wcs_world2pix(numpy.array([psf_compute_point.tolist()]), 0)[0]
+        pos = inwcs[j].all_world2pix(numpy.array([psf_compute_point.tolist()]), 0)[0]
         pixloc[j] = pos
         # check if this point is on the SCA
         if pos[0]<0 or pos[0]>=coadd_utils.sca_nside or pos[1]<0 or pos[1]>=coadd_utils.sca_nside:
@@ -330,11 +330,11 @@ for ipostage in range(nrun):
   posoffset = []
   xtile = ipostageX*outcoords.n2 + (outcoords.n2-1)/2.
   ytile = ipostageY*outcoords.n2 + (outcoords.n2-1)/2.
-  ctr = wcsout.wcs_pix2world(numpy.array([[xtile,ytile]]) ,0)[0]
+  ctr = wcsout.all_pix2world(numpy.array([[xtile,ytile]]) ,0)[0]
   incube = numpy.zeros((n_inframe, n_in, insize, insize))
   for i_in in range(n_in):
     j = useList[i_in]
-    pos = inwcs[j].wcs_world2pix(numpy.array([ctr.tolist()]), 0)[0]
+    pos = inwcs[j].all_world2pix(numpy.array([ctr.tolist()]), 0)[0]
     windows.append( coadd_utils.genWindow(pos[0],pos[1],insize,inwcs[j],wcsout) )
     posoffset.append(((windows[i_in]['outx']-xtile)*outcoords.dtheta*3600., (windows[i_in]['outy']-ytile)*outcoords.dtheta*3600.))
     inmask[i_in,:,:] = windows[i_in]['active']
