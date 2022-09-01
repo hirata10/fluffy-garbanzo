@@ -7,7 +7,11 @@ from astropy import wcs
 import galsim
 import healpy as hp
 
-from coadd_utils import SCAFov
+SCAFov = np.asarray([
+  [-0.071,-0.037], [-0.071, 0.109], [-0.070, 0.240], [-0.206,-0.064], [-0.206, 0.083], [-0.206, 0.213], [-0.341,-0.129], [-0.341, 0.018], [-0.342, 0.147],
+  [ 0.071,-0.037], [ 0.071, 0.109], [ 0.070, 0.240], [ 0.206,-0.064], [ 0.206, 0.083], [ 0.206, 0.213], [ 0.341,-0.129], [ 0.341, 0.018], [ 0.342, 0.147]
+])
+
 # Import the PSF function
 #
 from psf_utils import get_psf_pos
