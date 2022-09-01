@@ -14,7 +14,7 @@ import psf_utils
 # interface to injecting GalSim objects
 import inject_galsim_obj
 # and more general noise fields
-import inject_complex_noise
+# import inject_complex_noise
 
 ### This file contains assorted utilities and Roman WFI data needed for the coadd code. ###
 
