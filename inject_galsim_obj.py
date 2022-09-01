@@ -45,7 +45,7 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
     m = np.arange(npix)
     ra_hpix, dec_hpix = hp.pix2ang(2**res, m, nest=True, lonlat=True)
 
-    ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)[0]
+    ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
     side = (sca_nside * 0.11)/3600
     ra_min = ra_cent - side; ra_max = ra_cent + side
     dec_min = dec_cent - side; dec_max = dec_cent + side
@@ -79,5 +79,5 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
         source = galsim.Convolve([interp_psf, st_model])
         source.drawImage(sub_image, offset=draw_offset, add_to_image=True)
     
-    sca_image.write('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/test.fits')
+    sca_image.write('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/out/test_'+str(idsca[0])+'_'+str(idsca[1])+'.fits')
     return sca_image.array
