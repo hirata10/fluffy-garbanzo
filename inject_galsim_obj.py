@@ -2,11 +2,12 @@
 #
 #
 
-import numpy
+import numpy as np
 from astropy import wcs
 import galsim
-import healpy
+import healpy as hp
 
+from coadd_utils import SCAFov
 # Import the PSF function
 #
 from psf_utils import get_psf_pos
@@ -36,4 +37,42 @@ from psf_utils import get_psf_pos
 #
 def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=None):
 
-  return numpy.ones((sca_nside,sca_nside)) # right now a bunch of 1's -- placeholder.
+    npix = hp.nside2npix(2**res)
+    m = np.arange(npix)
+    ra_hpix, dec_hpix = hp.pix2ang(2**res, m, nest=True, lonlat=True)
+
+    ra_cent, dec_cent = mywcs.all_pix2world(SCAFov[idsca[0]-1, 0], SCAFov[idsca[0]-1, 1], 0)
+    side = (sca_nside * 0.11)/3600
+    ra_min = ra_cent - side; ra_max = ra_cent + side
+    dec_min = dec_cent - side; dec_max = dec_cent + side
+
+    msk = ((ra_hpix > ra_min) & (ra_hpix < ra_max) & (dec_hpix > dec_min) & (dec_hpix < dec_max))
+    ra_hpix = ra_hpix[msk]
+    dec_hpix = dec_hpix[msk]
+
+    # convert to SCA coordinates
+    x_sca, y_sca = mywcs.all_world2pix(ra_hpix, dec_hpix, 0)
+    num_obj = len(x_sca)
+
+    pad = 10
+    n_in_stamp = 128
+    sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
+    for n in range(num_obj):
+      
+        psf = get_psf_pos(inpsf, idsca, obsdata, (x_sca[n], y_sca[n]), extraargs=None)
+        interp_psf = galsim.InterpolatedImage(psf, x_interpolant='lanczos50')
+        
+        xy = galsim.PositionD(x_sca[n], y_sca[n])
+        xyI = xy.round()
+        draw_offset = xy - xyI
+        b = galsim.BoundsI( xmin=xyI.x-int(n_in_stamp/2)+1,
+                            ymin=xyI.y-int(n_in_stamp/2)+1,
+                            xmax=xyI.x+int(n_in_stamp/2),
+                            ymax=xyI.y+int(n_in_stamp/2))
+
+        sub_image = sca_image[b]
+        st_model = galsim.DeltaFunction(flux=1.)
+        source = galsim.Convolve([interp_psf, st_model])
+        source.drawImage(sub_image, offset=draw_offset, add_to_image=True)
+
+    return sca_image.array
