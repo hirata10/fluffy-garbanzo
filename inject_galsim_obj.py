@@ -45,7 +45,7 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
     m = np.arange(npix)
     ra_hpix, dec_hpix = hp.pix2ang(2**res, m, nest=True, lonlat=True)
 
-    ra_cent, dec_cent = mywcs.all_pix2world(SCAFov[idsca[0]-1, 0], SCAFov[idsca[0]-1, 1], 0)
+    ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)[0]
     side = (sca_nside * 0.11)/3600
     ra_min = ra_cent - side; ra_max = ra_cent + side
     dec_min = dec_cent - side; dec_max = dec_cent + side
