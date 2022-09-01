@@ -74,5 +74,6 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
         st_model = galsim.DeltaFunction(flux=1.)
         source = galsim.Convolve([interp_psf, st_model])
         source.drawImage(sub_image, offset=draw_offset, add_to_image=True)
-
+    
+    sca_image.write('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/test.fits')
     return sca_image.array
