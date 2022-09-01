@@ -64,7 +64,7 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
     for n in range(num_obj):
       
         psf = get_psf_pos(inpsf, idsca, obsdata, (x_sca[n], y_sca[n]), extraargs=None)
-        psf_image = galsim.Image(psf)
+        psf_image = galsim.Image(psf, scale=0.11)
         interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
         
         xy = galsim.PositionD(x_sca[n], y_sca[n])
