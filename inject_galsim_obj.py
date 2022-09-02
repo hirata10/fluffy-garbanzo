@@ -65,7 +65,7 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
         
         xy = galsim.PositionD(x_sca[n], y_sca[n])
         xyI = xy.round()
-        draw_offset = (xy - xyI) + 0.5
+        draw_offset = (xy - xyI) + galsim.PositionD(0.5, 0.5)
         b = galsim.BoundsI( xmin=xyI.x-n_in_stamp//2+pad//2+1,
                             ymin=xyI.y-n_in_stamp//2+pad//2+1,
                             xmax=xyI.x+n_in_stamp//2+pad//2,
