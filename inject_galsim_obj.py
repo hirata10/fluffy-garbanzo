@@ -41,44 +41,47 @@ from psf_utils import get_psf_pos
 #
 def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=None):
 
-    npix = hp.nside2npix(2**res)
-    m = np.arange(npix)
-    ra_hpix, dec_hpix = hp.pix2ang(2**res, m, nest=True, lonlat=True)
-
     ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
-    side = (sca_nside * 0.11)/3600
-    ra_min = ra_cent - side; ra_max = ra_cent + side
-    dec_min = dec_cent - side; dec_max = dec_cent + side
 
-    msk = ((ra_hpix > ra_min) & (ra_hpix < ra_max) & (dec_hpix > dec_min) & (dec_hpix < dec_max))
-    ra_hpix = ra_hpix[msk]
-    dec_hpix = dec_hpix[msk]
+    search_radius = (sca_nside * 0.11)/3600*(np.pi/180.)*np.sqrt(2)
+    vec = hp.ang2vec(ra_cent, dec_cent, lonlat=True)
+    qp = hp.query_disc(2**res, vec, search_radius, nest=True)
+    ra_hpix, dec_hpix = hp.pix2ang(2**res, qp, nest=True, lonlat=True)
+
+    # side = (sca_nside * 0.11)/3600
+    # ra_min = ra_cent - side; ra_max = ra_cent + side
+    # dec_min = dec_cent - side; dec_max = dec_cent + side
+
+    # msk = ((ra_hpix > ra_min) & (ra_hpix < ra_max) & (dec_hpix > dec_min) & (dec_hpix < dec_max))
+    # ra_hpix = ra_hpix[msk]
+    # dec_hpix = dec_hpix[msk]
 
     # convert to SCA coordinates
     x_sca, y_sca = mywcs.all_world2pix(ra_hpix, dec_hpix, 0)
+    msk_sca = 0<x<4088, 0<y<4088
     num_obj = len(x_sca)
 
-    pad = 10
     n_in_stamp = 128
+    pad = n_in_stamp
     sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
     for n in range(num_obj):
       
         psf = get_psf_pos(inpsf, idsca, obsdata, (x_sca[n], y_sca[n]), extraargs=None)
-        psf_image = galsim.Image(psf, scale=0.11)
+        psf_image = galsim.Image(psf, scale=0.11/inpsf['oversamp'])
         interp_psf = galsim.InterpolatedImage(psf_image, x_interpolant='lanczos50')
         
         xy = galsim.PositionD(x_sca[n], y_sca[n])
         xyI = xy.round()
-        draw_offset = xy - xyI
-        b = galsim.BoundsI( xmin=xyI.x-int(n_in_stamp/2)+1,
-                            ymin=xyI.y-int(n_in_stamp/2)+1,
-                            xmax=xyI.x+int(n_in_stamp/2),
-                            ymax=xyI.y+int(n_in_stamp/2))
+        draw_offset = (xy - xyI) + 0.5
+        b = galsim.BoundsI( xmin=xyI.x-n_in_stamp//2+pad//2+1,
+                            ymin=xyI.y-n_in_stamp//2+pad//2+1,
+                            xmax=xyI.x+n_in_stamp//2+pad//2,
+                            ymax=xyI.y+n_in_stamp//2+pad//2)
 
         sub_image = sca_image[b]
         st_model = galsim.DeltaFunction(flux=1.)
         source = galsim.Convolve([interp_psf, st_model])
-        source.drawImage(sub_image, offset=draw_offset, add_to_image=True)
+        source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
     
     sca_image.write('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/out/test_'+str(idsca[0])+'_'+str(idsca[1])+'.fits')
-    return sca_image.array
+    return sca_image.array[pad//2:-pad//2,pad//2:-pad//2]
