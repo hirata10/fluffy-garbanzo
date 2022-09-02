@@ -48,17 +48,10 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
     qp = hp.query_disc(2**res, vec, search_radius, nest=True)
     ra_hpix, dec_hpix = hp.pix2ang(2**res, qp, nest=True, lonlat=True)
 
-    # side = (sca_nside * 0.11)/3600
-    # ra_min = ra_cent - side; ra_max = ra_cent + side
-    # dec_min = dec_cent - side; dec_max = dec_cent + side
-
-    # msk = ((ra_hpix > ra_min) & (ra_hpix < ra_max) & (dec_hpix > dec_min) & (dec_hpix < dec_max))
-    # ra_hpix = ra_hpix[msk]
-    # dec_hpix = dec_hpix[msk]
-
     # convert to SCA coordinates
     x_sca, y_sca = mywcs.all_world2pix(ra_hpix, dec_hpix, 0)
-    msk_sca = 0<x<4088, 0<y<4088
+    msk_sca = ((x_sca >= 0) & (x_sca <= 4088) & (y_sca >= 0) & (y_sca <= 4088))
+    x_sca = x_sca[msk_sca]; y_sca = y_sca[msk_sca]
     num_obj = len(x_sca)
 
     n_in_stamp = 128
