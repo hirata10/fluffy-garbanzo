@@ -7,11 +7,6 @@ from astropy import wcs
 import galsim
 import healpy as hp
 
-SCAFov = np.asarray([
-  [-0.071,-0.037], [-0.071, 0.109], [-0.070, 0.240], [-0.206,-0.064], [-0.206, 0.083], [-0.206, 0.213], [-0.341,-0.129], [-0.341, 0.018], [-0.342, 0.147],
-  [ 0.071,-0.037], [ 0.071, 0.109], [ 0.070, 0.240], [ 0.206,-0.064], [ 0.206, 0.083], [ 0.206, 0.213], [ 0.341,-0.129], [ 0.341, 0.018], [ 0.342, 0.147]
-])
-
 # Import the PSF function
 #
 from psf_utils import get_psf_pos
@@ -75,6 +70,5 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
         st_model = galsim.DeltaFunction(flux=1.)
         source = galsim.Convolve([interp_psf, st_model])
         source.drawImage(sub_image, offset=draw_offset, add_to_image=True, method='no_pixel')
-    
-    sca_image.write('/hpc/group/cosmology/masaya/imcom_phase1/fluffy-garbanzo/out/test_'+str(idsca[0])+'_'+str(idsca[1])+'.fits')
+
     return sca_image.array[pad//2:-pad//2,pad//2:-pad//2]
