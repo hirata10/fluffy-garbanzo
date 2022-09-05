@@ -27,7 +27,7 @@ OUT: out/testfull9C
 
 # stop execution after a certain number of postage stamps
 # (for testing so we don't have to wait for all the postage stamps)
-#STOP: 20
+STOP: 5
 
 # number of IMCOM postage stamps to pad around each output region
 PAD: 2
