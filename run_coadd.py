@@ -238,7 +238,7 @@ sys.stdout.write('done.\n')
 sys.stdout.flush()
 print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
 print('')
-sys.exit()
+
 # allocate ancillary arrays
 T_weightmap = numpy.zeros((n_out,len(obslist),outcoords.n1P,outcoords.n1P), dtype=numpy.float32)
 
