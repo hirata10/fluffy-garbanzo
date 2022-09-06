@@ -2,10 +2,10 @@
 #
 #
 
-import numpy as np
+import numpy
 from astropy import wcs
 import galsim
-import healpy as hp
+import healpy
 
 # Import the PSF function
 #
@@ -38,19 +38,20 @@ def galsim_star_grid(res, mywcs, inpsf, idsca, obsdata, sca_nside, extraargs=Non
 
     ra_cent, dec_cent = mywcs.all_pix2world((sca_nside-1)/2, (sca_nside-1)/2, 0)
 
-    search_radius = (sca_nside * 0.11)/3600*(np.pi/180.)*np.sqrt(2)
-    vec = hp.ang2vec(ra_cent, dec_cent, lonlat=True)
-    qp = hp.query_disc(2**res, vec, search_radius, nest=True)
-    ra_hpix, dec_hpix = hp.pix2ang(2**res, qp, nest=True, lonlat=True)
+    search_radius = (sca_nside * 0.11)/3600*(numpy.pi/180.)*numpy.sqrt(2)
+    vec = healpy.ang2vec(ra_cent, dec_cent, lonlat=True)
+    qp = healpy.query_disc(2**res, vec, search_radius, nest=True)
+    ra_hpix, dec_hpix = healpy.pix2ang(2**res, qp, nest=True, lonlat=True)
 
     # convert to SCA coordinates
     x_sca, y_sca = mywcs.all_world2pix(ra_hpix, dec_hpix, 0)
-    msk_sca = ((x_sca >= 0) & (x_sca <= 4088) & (y_sca >= 0) & (y_sca <= 4088))
+    d = 16
+    msk_sca = ((x_sca >= -d) & (x_sca <= 4087+d) & (y_sca >= -d) & (y_sca <= 4087+d))
     x_sca = x_sca[msk_sca]; y_sca = y_sca[msk_sca]
     num_obj = len(x_sca)
 
     n_in_stamp = 280
-    pad = n_in_stamp
+    pad = n_in_stamp+2*(d+1)
     sca_image = galsim.ImageF(sca_nside+pad, sca_nside+pad, scale=0.11)
     for n in range(num_obj):
       

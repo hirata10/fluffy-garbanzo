@@ -26,7 +26,7 @@ stoptile = None # don't stop until we get to the end
 sigmatarget = 1.5/2.355 # FWHM Gaussian smoothing divided by 2.355 to be a sigma
 npixpsf = 64 # size of PSF postage stamp in native pixels
 instamp_pad = 1.055*coadd_utils.arcsec # input stamp size padding
-imcom_smax = 0.2
+imcom_smax = 0.5
 imcom_flat_penalty = 1e-6
 fade_kernel = 3 # fading kernel width
 n_inframe = 1; extrainput = [None] # number of input images to stack at once
@@ -415,7 +415,7 @@ T_hdu = fits.ImageHDU(T_weightmap)
 T_hdu.header['EXTNAME'] = 'INWEIGHT'
 T_hdu2 = fits.ImageHDU(numpy.transpose(T_weightmap,axes=(0,2,1,3)).reshape((n_out*outcoords.n1P,len(obslist)*outcoords.n1P)))
 T_hdu2.header['EXTNAME'] = 'INWTFLAT'
-fidelity_hdu = fits.ImageHDU(fidelity_map, header=wcsout.to_header())
+fidelity_hdu = fits.ImageHDU(fidelity_map[:,fade_kernel:-fade_kernel,fade_kernel:-fade_kernel], header=wcsout.to_header())
 fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
 fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
 hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])

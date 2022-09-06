@@ -11,10 +11,12 @@ from os.path import exists
 # may need to be able to read a PSF
 import psf_utils
 
+# interface for injecting stars using pyimcom_croutines functions
+import grid_inject
 # interface to injecting GalSim objects
 import inject_galsim_obj
 # and more general noise fields
-# import inject_complex_noise
+import inject_complex_noise
 
 ### This file contains assorted utilities and Roman WFI data needed for the coadd code. ###
 
@@ -109,6 +111,8 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
       if 'type' in extraargs.keys():
         if extraargs['type']=='truth':
           out = path+'/truth/dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
+        if extraargs['type']=='labnoise':
+          out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
 
     return out
 
@@ -167,10 +171,25 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
           seed = 1000000*(18*q+obslist[j][1]) + obslist[j][0]
           print('noise rng: frame_q={:d}, seed={:d}'.format(q,seed), '--> 1/f')
           hypercube[i,j,:,:] = inject_complex_noise.noise_1f_frame(seed)
+        # lab noise frames (if applicable)
+        if extrainput[i].casefold() == 'labnoise'.casefold():
+          filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs = {'type':'labnoise'})
+          print('lab noise: searching for ' + filename)
+          if exists(filename):
+            with fits.open(filename) as f: hypercube[i,j,:,:] = f[0].data
+          else:
+            print('Warning: labnoise file not found, skipping ...')
+        # C routine star grid
+        m = re.search(r'^cstar(\d+)$', extrainput[i], re.IGNORECASE)
+        if m:
+          res = int(m.group(1))
+          print('making grid using C routines: ', res, obslist[j])
+          hypercube[i,j,:,:] = grid_inject.make_image_from_grid(res, inpsf, obslist[j], obsdata, inwcs[j], sca_nside)
         # galsim star grid
         m = re.search(r'^gsstar(\d+)$', extrainput[i], re.IGNORECASE)
         if m:
           res = int(m.group(1))
+          print('making grid using GalSim: ', res, obslist[j])
           hypercube[i,j,:,:] = inject_galsim_obj.galsim_star_grid(res, inwcs[j], inpsf, obslist[j], obsdata, sca_nside)
 
   return hypercube
