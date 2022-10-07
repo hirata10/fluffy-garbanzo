@@ -16,15 +16,16 @@ rs = 1./numpy.sqrt(2.)/60.*numpy.pi/180*1.08333
 sigma = 20.
 
 nblock = 48
-ncol = 26
+ncol = 30
 nstart = 0
 WNuse_slice = 4
+PNuse_slice = 5
 use_slice = 2
 use_sliceB = 3
 
 area = {'Y': 7.06, 'J': 8.60, 'H': 10.96, 'F': 15.28}
 
-filter = sys.argv[1]; nblockuse = int(sys.argv[2])
+filter = sys.argv[1]; nblockuse = 2304 # try all
 
 if filter=='Y': filtername='Y106'
 if filter=='J': filtername='J129'
@@ -52,6 +53,7 @@ for iblock in range(nstart,nstart+nblockuse):
   with fits.open(infile) as f:
     mywcs = wcs.WCS(f[0].header)
     WNmap = f[0].data[0,WNuse_slice,:,:]
+    PNmap = f[0].data[0,PNuse_slice,:,:]
     map = f[0].data[0,use_slice,:,:]
     wt = numpy.rint(1./numpy.amax(f['INWEIGHT'].data[0,:,:,:]+1e-6, axis=0))
     mapB = f[0].data[0,use_sliceB,:,:]
@@ -88,12 +90,12 @@ for iblock in range(nstart,nstart+nblockuse):
   newpos[:,8] = dx = x-xi
   newpos[:,9] = dy = y-yi
 
-  WNimage = numpy.zeros((npix,bd*2-1,bd*2-1))
   newimage = numpy.zeros((npix,bd*2-1,bd*2-1))
   newimageB = numpy.zeros((npix,bd*2-1,bd*2-1))
   print(iblock, infile, npix)
   for k in range(npix):
     thisnoiseimage = WNmap[yi[k]+1-bd:yi[k]+bd,xi[k]+1-bd:xi[k]+bd]/SNR/numpy.sqrt(area[filter])
+    thisnoiseimageP = PNmap[yi[k]+1-bd:yi[k]+bd,xi[k]+1-bd:xi[k]+bd]/SNR/numpy.sqrt(area[filter]) / 10. # 10 = fNy/1kHz
     newimage[k,:,:] = map[yi[k]+1-bd:yi[k]+bd,xi[k]+1-bd:xi[k]+bd]
     newimageB[k,:,:] = mapB[yi[k]+1-bd:yi[k]+bd,xi[k]+1-bd:xi[k]+bd]
 
@@ -121,6 +123,7 @@ for iblock in range(nstart,nstart+nblockuse):
 
     # noise bias
     try:
+      sc = 1.
       moms_noise_zero = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
       moms_noise_positive = galsim.Image(newimage[k,:,:] + thisnoiseimage).FindAdaptiveMom()
       moms_noise_negative = galsim.Image(newimage[k,:,:] - thisnoiseimage).FindAdaptiveMom()
@@ -150,6 +153,40 @@ for iblock in range(nstart,nstart+nblockuse):
           print('ERROR {:d},{:d}  coverage={:2d}'.format(iblock,k,int(newpos[k,23])))
           pass
     newpos[k,24:26] *= SNR**2
+    newpos[k,26] = SNR*sc
+
+    try:
+      sc = 1.
+      moms_noise_zero = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
+      moms_noise_positive = galsim.Image(newimage[k,:,:] + thisnoiseimageP).FindAdaptiveMom()
+      moms_noise_negative = galsim.Image(newimage[k,:,:] - thisnoiseimageP).FindAdaptiveMom()
+      newpos[k,27] = (moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1)/2. - moms_noise_zero.observed_shape.g1
+      newpos[k,28] = (moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2)/2. - moms_noise_zero.observed_shape.g2
+    except:
+      try:
+        print('BACKUP-0.5    {:d},{:d}  coverage={:2d}'.format(iblock,k,int(newpos[k,23])))
+        sc = numpy.sqrt(10.)
+        moms_noise_zero = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
+        moms_noise_positive = galsim.Image(newimage[k,:,:] + thisnoiseimageP/sc).FindAdaptiveMom()
+        moms_noise_negative = galsim.Image(newimage[k,:,:] - thisnoiseimageP/sc).FindAdaptiveMom()
+        newpos[k,27] = (moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1)/2. - moms_noise_zero.observed_shape.g1
+        newpos[k,28] = (moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2)/2. - moms_noise_zero.observed_shape.g2
+        newpos[k,27:29] *= sc**2
+      except:
+        try:
+          print('BACKUP-1.0    {:d},{:d}  coverage={:2d}'.format(iblock,k,int(newpos[k,23])))
+          sc = 10.
+          moms_noise_zero = galsim.Image(newimage[k,:,:]).FindAdaptiveMom()
+          moms_noise_positive = galsim.Image(newimage[k,:,:] + thisnoiseimageP/sc).FindAdaptiveMom()
+          moms_noise_negative = galsim.Image(newimage[k,:,:] - thisnoiseimageP/sc).FindAdaptiveMom()
+          newpos[k,27] = (moms_noise_positive.observed_shape.g1 + moms_noise_negative.observed_shape.g1)/2. - moms_noise_zero.observed_shape.g1
+          newpos[k,28] = (moms_noise_positive.observed_shape.g2 + moms_noise_negative.observed_shape.g2)/2. - moms_noise_zero.observed_shape.g2
+          newpos[k,27:29] *= sc**2
+        except:
+          print('ERROR {:d},{:d}  coverage={:2d}'.format(iblock,k,int(newpos[k,23])))
+          pass
+    newpos[k,27:29] *= SNR**2
+    newpos[k,29] = SNR*sc
 
     # end galaxy loop
 
