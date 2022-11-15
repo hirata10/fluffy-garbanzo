@@ -1,0 +1,54 @@
+
+### THE PARAMETERS IN THIS SECTION ARE REQUIRED ###
+
+# input observation list
+OBSFILE: /users/PCON0003/cond0007/imcom/coadd-test-fall2022/observing_sequence_hls_06_21.fits
+
+# reference input file directory and naming convention (including the WCS used for stacking)
+INDATA: /fs/scratch/PCON0003/cond0007/combo-in dc2_imsim
+
+# location of the output region to make
+CTR: 53.0 -40.0
+OUTSIZE: 48 50 .025
+BLOCK: 48
+
+# which filter
+FILTER: 2
+
+# input PSF files & format
+INPSF: /fs/scratch/PCON0003/cond0007/combo-in/psf dc2_imsim
+
+# output location:
+OUT: /fs/scratch/PCON0003/cond0007/combo-out/test3H
+
+### END REQUIRED PARAMETERS ###
+
+### OPTIONAL PARAMETERS ###
+
+# stop execution after a certain number of postage stamps
+# (for testing so we don't have to wait for all the postage stamps)
+#STOP: 20
+
+# input stamp pad in arcsec
+INPAD: 1.25
+
+# number of IMCOM postage stamps to pad around each output region
+PAD: 2
+
+# smoothing of output PSF (units: input pixels, 1 sigma)
+EXTRASMOOTH: 0.6369913502160143
+
+# extra inputs
+# (use names for each one, space-delimited; meaning of names must be coded into
+# coadd_utils.py, with the meaning based on the naming convention in INDATA)
+EXTRAINPUT: truth gsstar14 cstar14 whitenoise1 1fnoise2 skyerr labnoise
+LABNOISETHRESHOLD: 3.
+
+# mask options:
+# PMASK --> permanent mask (from file)
+# CMASK --> cosmic ray mask (hit probability per pixel)
+PMASK: /users/PCON0003/cond0007/imcom/coadd-test-fall2022/permanent_mask_220730.fits
+CMASK: 7.7e-4
+
+# array cache file stem
+TEMPFILE: /tmp/cond0007-temph
