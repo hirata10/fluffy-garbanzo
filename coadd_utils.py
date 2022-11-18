@@ -113,6 +113,8 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
           out = path+'/truth/dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
         if extraargs['type']=='labnoise':
           out = path+'/labnoise/slope_{:d}_{:d}.fits'.format(idsca[0], idsca[1])
+        if extraargs['type']=='skyerr':
+          out = path+'/simple/dc2_{:s}_{:d}_{:d}.fits'.format(RomanFilters[obsdata['filter'][idsca[0]]], idsca[0], idsca[1])
 
     return out
 
@@ -130,12 +132,20 @@ def get_sca_imagefile(path, idsca, obsdata, format, extraargs=None):
 #   inwcs = input WCS list (same length as obslist)
 #   inpsf = input PSF information (dictionary; to be passed to psfutils routines if we draw objects)
 #   extrainput = make multiple maps (list of types, first should be None, rest strings)
-#   extraargs = for future compatibility
+#   extraargs = dictionary; may have the following (or more for future compatibility)
+#
+#      (*) tempfile => for memmap'ed arrays
 #
 def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrainput, extraargs=None):
 
   # start by allocating the memory ...
-  hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
+  if extraargs is not None:
+    if 'tempfile' in extraargs.keys():
+      hypercube = numpy.memmap(extraargs['tempfile'], mode='w+', dtype=numpy.float32, shape=(n_inframe, len(obslist), sca_nside, sca_nside))
+    else:
+      hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
+  else:
+    hypercube = numpy.zeros((n_inframe, len(obslist), sca_nside, sca_nside), dtype=numpy.float32)
 
   # now fill in each slice in the observation
   # (missing files are blank)
@@ -179,6 +189,11 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
             with fits.open(filename) as f: hypercube[i,j,:,:] = f[0].data
           else:
             print('Warning: labnoise file not found, skipping ...')
+        # skyerr
+        if extrainput[i].casefold() == 'skyerr'.casefold():
+          filename = get_sca_imagefile(path, obslist[j], obsdata, format, extraargs = {'type':'skyerr'})
+          if exists(filename):
+            with fits.open(filename) as f: hypercube[i,j,:,:] = f['ERR'].data - float(f['SCI'].header['SKY_MEAN'])
         # C routine star grid
         m = re.search(r'^cstar(\d+)$', extrainput[i], re.IGNORECASE)
         if m:

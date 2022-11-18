@@ -32,6 +32,8 @@ fade_kernel = 3 # fading kernel width
 n_inframe = 1; extrainput = [None] # number of input images to stack at once
 permanent_mask = None # no permanent pixel mask
 cr_mask_rate = 0. # CR hit probability for stochastic mask
+labnoisethreshold = 1.
+tempfile = None
 
 # Read in information
 config_file = sys.argv[1]
@@ -43,6 +45,10 @@ n_out = 1
 use_filter = 0
 hdu_with_wcs = 'SCI' # which header in the input file contains the WCS information
 outcoords.postage_pad = 0 # pad this many IMCOM postage stamps around the edge
+
+# subregion information
+if len(sys.argv)>2:
+  this_sub = int(sys.argv[2])
 
 for line in content:
   m = re.search(r'^OBSFILE\:\s*(\S+)', line)
@@ -107,9 +113,17 @@ for line in content:
   m = re.search('^PMASK\:\s*(\S+)', line)
   if m: permanent_mask = {'file': m.group(1)}
 
+  # permanent mask file
+  m = re.search('^TEMPFILE\:\s*(\S+)', line)
+  if m: tempfile = m.group(1) + '{:06d}.arr'.format(this_sub)
+
   # CR mask rate
   m = re.search('^CMASK\:\s*(\S+)', line)
   if m: cr_mask_rate = float(m.group(1))
+
+  # threshold for masking lab noise data
+  m = re.search('^LABNOISETHRESHOLD\:\s*(\S+)', line)
+  if m: labnoisethreshold = float(m.group(1))
 
   # stop bulding the tile after a certain number of postage stamps
   m = re.search('^STOP\:\s*(\d+)', line)
@@ -144,10 +158,6 @@ if obsfile is not None:
 else:
   print('Error: no obsfile found')
   exit()
-
-# subregion information
-if len(sys.argv)>2:
-  this_sub = int(sys.argv[2])
 
 # display output information
 print('Output information: ctr at RA={:10.6f},DEC={:10.6f}'.format(outcoords.ra, outcoords.dec))
@@ -233,7 +243,12 @@ if len(obslist)==0:
   print('No candidate observations found to stack. Exiting now.')
   exit()
 sys.stdout.write('Reading input data ... ')
-in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, inwcs, inpsf, extrainput)
+if tempfile is not None:
+  print('Using temporary storge -->', tempfile)
+  sys.stdout.flush()
+  in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, inwcs, inpsf, extrainput, extraargs={'tempfile':tempfile})
+else:
+  in_data = coadd_utils.get_all_data(n_inframe, obslist, obsdata, inpath, informat, inwcs, inpsf, extrainput)
 sys.stdout.write('done.\n')
 sys.stdout.flush()
 print('Size = {:6.1f} MB, shape ='.format(in_data.size*in_data.itemsize/1e6), numpy.shape(in_data))
@@ -251,6 +266,12 @@ else:
 if cr_mask_rate>0:
   cr_mask = numpy.ones((len(obslist),coadd_utils.sca_nside,coadd_utils.sca_nside),dtype=bool)
   for j in range(len(obslist)): cr_mask[j,:,:] = coadd_utils.randmask(obslist[j], cr_mask_rate)
+  print('Cosmic ray mask:')
+  print('good pix --> ', numpy.count_nonzero(cr_mask), '/', len(obslist)*4088**2)
+  for i_slice in range(len(extrainput)):
+    if extrainput[i_slice] == 'labnoise':
+      cr_mask[:,:,:] = numpy.logical_and(cr_mask, numpy.abs(in_data[i_slice,:,:,:])<labnoisethreshold)
+  print('good pix --> ', numpy.count_nonzero(cr_mask), '/', len(obslist)*4088**2)
 else:
   cr_mask = None
 
@@ -348,7 +369,7 @@ for ipostage in range(nrun):
   good1 = numpy.count_nonzero(inmask)
   if cr_mask is not None:
     for i_in in range(n_in):
-      inmask[i_in,:,:] = numpy.logical_and(inmask[i_in,:,:], coadd_utils.win_cutout(windows[i_in], cr_mask[i_in,:,:], False))
+      inmask[i_in,:,:] = numpy.logical_and(inmask[i_in,:,:], coadd_utils.win_cutout(windows[i_in], cr_mask[useList[i_in],:,:], False))
   good2 = numpy.count_nonzero(inmask)
   print('Mask: {:5d} --> {:5d} --> {:5d} pix'.format(good0,good1,good2))
 
