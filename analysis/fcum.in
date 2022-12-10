@@ -1,6 +1,6 @@
 set term postscript enhanced 22 eps color
 set output "fcum.eps"
-set size 1,1.25
+set size 1,1.75
 set xlabel "-10 log_{10} (U_{/Symbol a}/C)"
 set ylabel "Cumulative fraction"
 set logscale y
@@ -25,4 +25,6 @@ set label "**DRAFT**" at 26,.01
 set title "Output PSF fidelity: 1-point statistics\n  "
 plot\
   "fidelity_Y.txt" using 1:3 with linespoints title "Y106" ls 1,\
+  "fidelity_J.txt" using 1:3 with linespoints title "J129" ls 2,\
+  "fidelity_H.txt" using 1:3 with linespoints title "H158" ls 3,\
   "fidelity_F.txt" using 1:3 with linespoints title "F184" ls 4

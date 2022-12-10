@@ -1,7 +1,7 @@
 # bands: Y, J, H, F
-@bandnames = ('Y106', 'F184');
+@bandnames = ('Y106', 'J129', 'F184');
 
-@infiles = ('StarCat_Y_sample221007.txt', 'StarCat_F_sample221007.txt');
+@infiles = ('StarCat_Y.txt', 'StarCat_J_sample221028.txt', 'StarCat_F_sample221024.txt');
 
 open(G, "|tee script.txt | gnuplot");
 print G qq^set term postscript enhanced 26 eps color\n^;
