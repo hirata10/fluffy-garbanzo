@@ -1,0 +1,132 @@
+### Overview ###
+
+The script run_coadd.py carries out a set of calls to coadd simulated Roman data over a footprint.
+
+Dependencies:
+
+-- numpy
+-- astropy
+-- fitsio (Erin Sheldon's package)
+-- pyimcom_interface (clone https://github.com/hirata10/furry-parakeet and follow installation instructions)
+
+Calling format:
+
+python run_coadd.py <config_file> <number of block to run>
+
+The second argument is an integer in the range from 0 to BLOCK**2-1 (see below for value of BLOCK). The 
+intention is that this can be used to split the blocks into jobs on a supercomputer, but with the same 
+config_file.
+
+There is an example config file in sample_config.in.
+
+### Configuration format ###
+
+The configuration file is read using regular expressions, and has the format
+
+KEYWORD: arguments (space delimited)
+
+Lines beginning with '#' are comments.
+
+Current *required* keyword/argument pairs are:
+
+OBSFILE: <list of observation files>
+(these is a FITS table of the observations)
+
+INDATA: <directory of the data> <format structure for the data>
+
+Format structure options right now are:
+  dc2_imsim
+
+CTR: <ra> <dec>
+center of the output projection; RA and Dec in degrees
+(right now uses stereographic projection)
+
+OUTSIZE: <n1> <2> <dtheta>
+breaks the output into n1 x n1 postage stamps of size n2 x n2
+an output pixel is dtheta arcsec
+
+BLOCK: <nblock>
+sets up an nblock x nblock structure of blocks. each block is a single call to the python script (with argv[2] 
+indicating which one -- this way we can run many blocks in parallel using the same script).
+
+So overall if you run all nblock x nblock jobs, you get a region of size
+(nblock x n1 x n2 x dtheta) x (nblock x n1 x n2 x dtheta) arcsec
+
+typical parameters might be nblock=60, n1=48, n2=50, dtheta=0.025 --> 3600x3600 arcsec or 1 deg^2
+
+FILTER: <ifilter>
+Which filter to use in 0..10 inclusive. The ordering is
+RomanFilters  = ['W146', 'F184', 'H158', 'J129', 'Y106', 'Z087', 'R062', 'PRSM', 'DARK', 'GRSM', 'K213']
+(of course PRSM, DARK, and GRSM are not really applicable for stacking images)
+
+INPSF: <psf dir> <format structure for the psf>
+
+Right now the format structures supported are:
+  dc2_imsim
+
+OUT: <stem for output file location>
+Output files will be of the form <stem>_<ibx>_<iby>... .fits (or .txt or whatever type of output)
+where (ibx,iby) are the locations of the blocks.
+
+*Optional keywords*:
+
+PAD: <npad>
+pads each output block by <npad> IMCOM patches (so that there is some overlap of the output images).
+
+EXTRAINPUT: <input1> <input2> ...
+
+a space-delimited list of names for extra input slices. Each one has the same WCS as the input data, and the 
+meaning is defined by the same format structure. Current EXTRAINPUTs are:
+
+format dc2_imsim:
+  truth: 'true' input image, without noise or instrument effects
+  whitenoise$i: white noise input frame, generated from RNG, seed determined by obsid/sca so that
+    for the same $i the same image will be generated each time ($i = integer >=1)
+
+each one results in an extra slice in the output images
+
+(Note that each format can have its own possible set of supported EXTRAINPUTs -- for example, 'truth' will exist 
+for simulated inputs, but we can't go look it up in a file for the real data)
+
+### Input files and directories ###
+
+The currently supported file and directory formats (where $INDATA_DIR and $INPSF_DIR are the directories given 
+in the INDATA and INPSF lines):
+
+dc2_imsim:
+  input data: $INDATA_DIR/simple/dc2_$filter\_$obsid\_$sca.fits [HDU 'SCI']
+  EXTRAINPUT truth: $INDATA_DIR/truth/dc2_$filter\_$obsid\_$sca.fits [HDU 'SCI']
+  PSF: $INPSF_DIR/simple/dc2_psf_$filter.fits [HDU $sca]
+
+If you are on a system where the files are in a different subdirectory structure, I recommend creating symbolic 
+links so you can use the same format code.
+
+The system will search for the input data files, and if they are not found (e.g., that obsid/sca pair is not 
+available) then it will exclude those observations and move on. EXTRAINPUTs that are not found are simply set to 
+0.
+
+### Adding formats and inputs ###
+
+You will have to add to some of the functions in coadd_utils.py, make sure you follow the conventions for the 
+existing formats/inputs.
+
+If you add a new EXTRAINPUT to an existing format:
+
+(*) add the code to make a 4088x4088 numpy image to coadd_utils.get_all_data
+
+(*) add the file names for the inputs (if they are external inputs and not internally generated noise) to 
+coadd_utils.get_sca_imagefile so the script knows where to find them.
+
+(*) add it to the documentation on EXTRAINPUT in this file
+
+If you want to add a new input format:
+
+(*) add the file names for the inputs to coadd_utils.get_sca_imagefile
+
+(*) add the code to make a 4088x4088 numpy image to coadd_utils.get_all_data -- will need to do this for each 
+EXTRAINPUT you want to use with that format:
+
+(*) add a PSF lookup for that format to coadd_utils.get_psf_pos
+
+(*) add it to the documentation on INDATA in this file
+
