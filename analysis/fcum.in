@@ -1,13 +1,13 @@
 set term postscript enhanced 22 eps color
 set output "fcum.eps"
-set size 1,1.75
+set size 1,1.6
 set xlabel "-10 log_{10} (U_{/Symbol a}/C)"
 set ylabel "Cumulative fraction"
 set logscale y
-set style line 4 lt 1 lw 2.5 dt 1 ps 1 pt 1 lc rgb "#ff0000"
-set style line 3 lt 1 lw 2.5 dt 2 ps 1 pt 2 lc rgb "#808000"
-set style line 2 lt 1 lw 2.5 dt 3 ps 1 pt 3 lc rgb "#00a080"
-set style line 1 lt 1 lw 2.5 dt 4 ps 1 pt 4 lc rgb "#3000e0"
+set style line 4 lt 1 lw 2.5 dt 1 ps 1 pt 1 lc rgb "#101010"
+set style line 3 lt 1 lw 2.5 dt 2 ps 1 pt 2 lc rgb "#eaa000"
+set style line 2 lt 1 lw 2.5 dt 3 ps 1 pt 3 lc rgb "#5ab8ec"
+set style line 1 lt 1 lw 2.5 dt 4 ps 1 pt 4 lc rgb "#10a277"
 set ytics ("10^{-5}" 1e-5, "" 2e-5, "" 3e-5, "" 4e-5, "" 5e-5, "" 6e-5, "" 7e-5, "" 8e-5, "" 9e-5,\
   "10^{-4}" 1e-4, "" 2e-4, "" 3e-4, "" 4e-4, "" 5e-4, "" 6e-4, "" 7e-4, "" 8e-4, "" 9e-4,\
   "0.1%%" 1e-3, "" 2e-3, "" 3e-3, "" 4e-3, "" 5e-3, "" 6e-3, "" 7e-3, "" 8e-3, "" 9e-3,\
@@ -18,10 +18,10 @@ set yrange [1e-5:1]
 set grid
 set xrange [25:60]
 set xtics 5
-set x2label "(U_{/Symbol a}/C)^{1/2}"
-set x2tics ("5.6%%" 25, "3.2%%" 30, "1.8%%" 35, "1%%" 40, "0.56%%" 45, "0.32%%" 50, "0.18%%" 55, "0.1%%" 60)
+#set x2label "(U_{/Symbol a}/C)^{1/2}"
+#set x2tics ("5.6%%" 25, "3.2%%" 30, "1.8%%" 35, "1%%" 40, "0.56%%" 45, "0.32%%" 50, "0.18%%" 55, "0.1%%" 60)
 set key at 39,.7
-set label "**DRAFT**" at 26,.01
+#set label "**DRAFT**" at 26,.01
 set title "Output PSF fidelity: 1-point statistics\n  "
 plot\
   "fidelity_Y.txt" using 1:3 with linespoints title "Y106" ls 1,\

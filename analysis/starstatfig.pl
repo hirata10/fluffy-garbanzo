@@ -1,12 +1,12 @@
 # bands: Y, J, H, F
-@bandnames = ('Y106', 'J129', 'F184');
+@bandnames = ('Y106', 'J129', 'H158', 'F184');
 
-@infiles = ('StarCat_Y.txt', 'StarCat_J_sample221028.txt', 'StarCat_F_sample221024.txt');
+@infiles = ('StarCat_Y.txt', 'StarCat_J.txt', 'StarCat_H_sample230120.txt', 'StarCat_F.txt');
 
 open(G, "|tee script.txt | gnuplot");
 print G qq^set term postscript enhanced 26 eps color\n^;
 print G qq^set output "starstatfig.eps"\n^;
-print G qq^set size 4,3.6\n^;
+print G qq^set size 4,4.8\n^;
 print G qq^set origin 0,0\n^;
 print G qq^set multiplot\n^;
 print G qq^set label "**DRAFT**" at 51,-2.2\n^;
