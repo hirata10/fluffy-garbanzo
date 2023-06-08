@@ -1,3 +1,4 @@
+import sys
 import numpy
 import scipy
 from scipy.ndimage import convolve
@@ -206,6 +207,14 @@ def get_all_data(n_inframe, obslist, obsdata, path, format, inwcs, inpsf, extrai
           res = int(m.group(1))
           print('making grid using GalSim: ', res, obslist[j])
           hypercube[i,j,:,:] = inject_galsim_obj.galsim_star_grid(res, inwcs[j], inpsf, obslist[j], obsdata, sca_nside)
+        # galsim extobj grid
+        m = re.search(r'^gsext(\d+)', extrainput[i], re.IGNORECASE)
+        if m:
+          res = int(m.group(1))
+          extargs = extrainput[i].split(',')[1:]
+          print('making grid using GalSim: ', res, obslist[j], 'extended object type:', extargs)
+          hypercube[i,j,:,:] = inject_galsim_obj.galsim_extobj_grid(res, inwcs[j], inpsf, obslist[j], obsdata, sca_nside, extraargs=extargs)
+        sys.stdout.flush()
 
   return hypercube
 

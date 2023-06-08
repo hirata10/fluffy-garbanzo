@@ -34,6 +34,7 @@ permanent_mask = None # no permanent pixel mask
 cr_mask_rate = 0. # CR hit probability for stochastic mask
 labnoisethreshold = 1.
 tempfile = None
+kappamap = {'isOut': False, 'use_kappa_arr': None}
 
 # Read in information
 config_file = sys.argv[1]
@@ -87,6 +88,18 @@ for line in content:
   # which filter to make coadd
   m = re.search('^FILTER\:\s*(\S+)', line)
   if m: use_filter = int(m.group(1))
+
+  # Lagrange multiplier (kappa) information
+  # if 1 argument --> output kappa map? true/false
+  # if >1 argument --> list of kappa values, ascending order
+  m = re.search('^KAPPA\:\s*(\S+)', line)
+  if m:
+    if m.group(1).lower() == 'true' or m.group(1).lower() == 't':
+      kappamap['isOut'] = True
+    kdata = line.split()
+    if len(kdata)>2:
+      kappamap['isOut'] = True
+      kappamap['use_kappa_arr'] = numpy.array([float(x) for x in kdata[1:]])
 
   # input files
   m = re.search('^INDATA\:\s*(\S+)\s+(\S+)', line)
@@ -199,6 +212,12 @@ out_map = numpy.zeros((n_out, n_inframe, outcoords.NsideP+fade_kernel*2, outcoor
 # (initialize at full fidelity)
 fidelity_map = numpy.zeros((n_out, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.uint8) # store as integer, will be in dB
 fidelity_map[:,:,:] = 255
+#
+# and kappa, if needed. 2 layers, min and max
+if kappamap['isOut']:
+  kappamap['image'] = numpy.zeros((2, outcoords.NsideP+fade_kernel*2, outcoords.NsideP+fade_kernel*2), dtype=numpy.float32)
+  kappamap['image'][0,:,:] = 1e32 # start min layer at a large value
+  print('kappa array', kappamap['use_kappa_arr'])
 
 # and the output PSFs and target leakages
 #
@@ -295,6 +314,7 @@ for ipostage in range(nrun):
     psf_compute_point = wcsout.all_pix2world(numpy.array([[(ipostageX+1)*outcoords.n2-.5,(ipostageY+1)*outcoords.n2-.5]]) ,0)[0]
     dWdp_out = wcs.utils.local_partial_pixel_derivatives(wcsout,(ipostageX+1)*outcoords.n2-.5,(ipostageY+1)*outcoords.n2-.5)
     print('INPUT/PSF computation at RA={:8.4f}, Dec={:8.4f}'.format(psf_compute_point[0], psf_compute_point[1]))
+    print(' --> partial derivatives, ', dWdp_out)
     useInput = infile_exists.copy()
     psfs = [None for l in range(len(obslist))]
     pixloc = [None for l in range(len(obslist))]
@@ -331,8 +351,11 @@ for ipostage in range(nrun):
           * outcoords.dtheta*coadd_utils.degree/coadd_utils.pixscale_native)
     print('using input exposures:', useList)
 
-    psfOverlap = pyimcom_interface.PSF_Overlap(InputPSF, OutputPSF, .5, 2*npixpsf*inpsf['oversamp']-1, coadd_utils.pixscale_native/coadd_utils.arcsec,
+    #psfOverlap = pyimcom_interface.PSF_Overlap(InputPSF, OutputPSF, .5, 2*npixpsf*inpsf['oversamp']-1, coadd_utils.pixscale_native/coadd_utils.arcsec,
+    #    distort_matrices=distort_matrices, amp_penalty={'amp':1., 'sig':3.*inpsf['oversamp']})
+    psfOverlap = pyimcom_interface.PSF_Overlap(InputPSF, OutputPSF, .5, 2*npixpsf*inpsf['oversamp']+15, coadd_utils.pixscale_native/coadd_utils.arcsec,
         distort_matrices=distort_matrices, amp_penalty={'amp':1., 'sig':3.*inpsf['oversamp']})
+    print('computed overlap, C=', psfOverlap.C)
 
     # this output was for testing. might put it back later
     #hdu = fits.PrimaryHDU(psfOverlap.psf_array)
@@ -375,7 +398,7 @@ for ipostage in range(nrun):
 
   imcomSysSolve = pyimcom_interface.get_coadd_matrix(psfOverlap, float(inpsf['oversamp']), uctarget, posoffset, distort_matrices,
     coadd_utils.pixscale_native/coadd_utils.arcsec, (insize,insize), outcoords.dtheta*3600, (outcoords.n2f,outcoords.n2f),
-    inmask, instamp_pad/coadd_utils.arcsec, imcom_smax, flat_penalty=imcom_flat_penalty)
+    inmask, instamp_pad/coadd_utils.arcsec, smax=imcom_smax, flat_penalty=imcom_flat_penalty, use_kappa_arr=kappamap['use_kappa_arr'])
   print('  n input pix =',numpy.sum(numpy.where(imcomSysSolve['full_mask'],1,0)))
   sumstats = '  sqUC,sqSig %iles |'
   for i in [50,90,98,99]:
@@ -401,6 +424,14 @@ for ipostage in range(nrun):
   this_fidelity_map = numpy.floor(-10*numpy.log10(numpy.clip(imcomSysSolve['UC'],10**(-25.5999),.99999))).astype(numpy.uint8)
   fidelity_map[:,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] = numpy.minimum(
     fidelity_map[:,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2], this_fidelity_map)
+
+  # kappa map
+  if kappamap['isOut']:
+    this_kappamap = imcomSysSolve['kappa'][0,:,:]
+    kappamap['image'][0,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] = numpy.minimum(
+      kappamap['image'][0,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2], this_kappamap)
+    kappamap['image'][1,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2] = numpy.maximum(
+      kappamap['image'][1,ipostageY*outcoords.n2:(ipostageY+1)*outcoords.n2+fade_kernel*2,ipostageX*outcoords.n2:(ipostageX+1)*outcoords.n2+fade_kernel*2], this_kappamap)
 
   sys.stdout.flush()
 
@@ -441,6 +472,9 @@ fidelity_hdu.header['EXTNAME'] = 'FIDELITY'
 fidelity_hdu.header['UNIT'] = ('dB', '-10*log10(U/C)')
 hdu_list = fits.HDUList([maphdu, config_hdu, inlist_hdu, T_hdu, T_hdu2, fidelity_hdu])
 hdu_list.writeto(outstem+'_map.fits', overwrite=True)
+
+# ... and the kappa map, if requested
+if kappamap['isOut']: fits.PrimaryHDU(kappamap['image']).writeto(outstem+'_kappa.fits', overwrite=True)
 
 os.system('cp ' + config_file + ' ' + outstem + '_config.txt')
 
